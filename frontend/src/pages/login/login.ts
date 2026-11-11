@@ -36,7 +36,8 @@ export function safeRedirect(raw: string | null | undefined, fallback = '/contra
   if (value.includes('://') || value.includes('\\') || /[\u0000-\u001f]/.test(value)) return fallback
   const path = value.split('?')[0].split('#')[0].replace(/\/+$/, '')
   if (path === '/login') return fallback
-  return value
+  // Kiểm tra trên giá trị đã giải mã, nhưng trả về chuỗi gốc để không giải mã hai lần.
+  return raw.trim()
 }
 
 export function redirectTarget(search: string): string {

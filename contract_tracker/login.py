@@ -16,4 +16,5 @@ def safe_redirect(target: str | None, default: str = DEFAULT_REDIRECT) -> str:
 	path = value.split("?", 1)[0].split("#", 1)[0].rstrip("/")
 	if path == "/login":
 		return default
-	return value
+	# Kiểm tra trên giá trị đã giải mã, nhưng trả về chuỗi gốc để không giải mã hai lần.
+	return str(target).strip()
