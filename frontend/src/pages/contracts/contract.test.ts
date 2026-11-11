@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { checkField } from '@/standard'
+import { cellText, checkField } from '@/standard'
 import type { Contract } from '@/types/doctypes'
 import {
   COLUMNS,
   FORM_RULES,
   MSG_END_BEFORE_START,
   MSG_END_REQUIRED,
+  MSG_NO_SCHEDULE,
+  PERIODS,
+  SCHEDULE_COLUMNS,
+  SCHEDULE_DOCTYPE,
   STATUSES,
+  acceptanceStatusOf,
   applyContractEndDate,
+  invoiceStatusOf,
+  paymentStatusOf,
+  periodText,
+  recurringPeriods,
+  requestStatusOf,
+  scheduleTotals,
+  showScheduleTable,
+  type ScheduleRow,
   canActivate,
   canCancel,
   canLiquidate,
@@ -407,5 +420,118 @@ describe('trạng thái', () => {
     expect(lockedMessage('Đã hủy')).toBe('Hợp đồng đã hủy, không sửa được.')
     expect(lockedMessage('Đã thanh lý')).toBe('Hợp đồng đã thanh lý, không sửa được.')
     expect(lockedMessage('Hết hạn')).toBe('Hợp đồng đã hết hạn, không sửa được.')
+  })
+})
+
+describe('chu kỳ Ngày', () => {
+  it('thiếu hoặc sai số ngày mỗi kỳ thì báo lỗi ở items.0.period_days', () => {
+    for (const value of [null, 0, -3, 1.5]) {
+      const errors = validateItems(form({ items: [recurringItem({ period: 'Ngày', period_days: value })] }))
+      expect(errors['items.0.period_days'], String(value)).toContain('số ngày mỗi kỳ')
+    }
+    expect(validateItems(form({ items: [recurringItem({ period: 'Ngày', period_days: null })] }))['items.0.period_days']).toContain('vui lòng nhập')
+    expect(validateItems(form({ items: [recurringItem({ period: 'Ngày', period_days: 0 })] }))['items.0.period_days']).toContain('phải lớn hơn 0')
+  })
+
+  it('số ngày hợp lệ thì không lỗi; chu kỳ khác bỏ qua ô này', () => {
+    expect(validateItems(form({ items: [recurringItem({ period: 'Ngày', period_days: 15 })] }))).toEqual({})
+    expect(validateItems(form({ items: [recurringItem({ period: 'Quý', period_days: 0 })] }))).toEqual({})
+  })
+
+  it('toPayload chỉ gửi period_days khi chu kỳ Ngày; fromDoc giữ lại', () => {
+    expect(toPayload(form({ items: [recurringItem({ period: 'Ngày', period_days: 15 })] })).items[0].period_days).toBe(15)
+    expect(toPayload(form({ items: [recurringItem({ period: 'Quý', period_days: 15 })] })).items[0].period_days).toBeNull()
+    const back = fromDoc({
+      name: 'X', contract_no: 'X', customer: 'K', start_date: '2027-01-01',
+      items: [{ name: 'a', item_name: 'L', vat_rate: '8%', billing_type: 'Định kỳ', period: 'Ngày', period_days: 15 }],
+    } as unknown as Contract)
+    expect(back.items[0].period_days).toBe(15)
+  })
+
+  it('PERIODS có thêm Ngày, giữ các chu kỳ cũ', () => {
+    expect(PERIODS).toEqual(['Tháng', 'Quý', '6 tháng', 'Năm', 'Ngày'])
+  })
+})
+
+describe('recurringPeriods', () => {
+  it('Ngày: 15 ngày/kỳ, kỳ cuối lẻ 11 ngày', () => {
+    const p = recurringPeriods('Ngày', '2027-01-01', '2027-02-10', 15)
+    expect(p.map((x) => [x.from, x.to])).toEqual([
+      ['2027-01-01', '2027-01-15'],
+      ['2027-01-16', '2027-01-30'],
+      ['2027-01-31', '2027-02-10'],
+    ])
+    expect(p.map((x) => x.ratio)).toEqual([1, 1, 11 / 15])
+  })
+
+  it('Ngày: số ngày sai thì không có kỳ', () => {
+    expect(recurringPeriods('Ngày', '2027-01-01', '2027-02-10', 0)).toEqual([])
+    expect(recurringPeriods('Ngày', '2027-01-01', '2027-02-10', null)).toEqual([])
+  })
+
+  it('Quý: kỳ cuối lẻ khớp bản Python', () => {
+    const p = recurringPeriods('Quý', '2027-01-01', '2027-05-15')
+    expect(p).toHaveLength(2)
+    expect(p[0]).toEqual({ from: '2027-01-01', to: '2027-03-31', ratio: 1 })
+    expect(p[1].from).toBe('2027-04-01')
+    expect(p[1].to).toBe('2027-05-15')
+    expect(p[1].ratio).toBeCloseTo(45 / 91)
+    expect(recurringPeriods('Quý', '2027-01-01', '2027-12-31')).toHaveLength(4)
+    expect(recurringPeriods('Năm', '2027-01-01', '2027-12-31')).toHaveLength(1)
+    expect(recurringPeriods('Tháng', '2027-01-31', '2027-03-31').map((x) => x.from)).toEqual(['2027-01-31', '2027-02-28', '2027-03-31'])
+  })
+})
+
+describe('tab Lịch thu', () => {
+  const rows: ScheduleRow[] = [
+    { name: 'a', item_name: 'License', schedule_name: 'Quý 1/2027', period_from: '2027-01-01', period_to: '2027-03-31', due_date: '2027-01-16', amount_before_tax: 15_000_000, tax_amount: 0, total_amount: 15_000_000, requires_acceptance: 0 },
+    { name: 'b', item_name: 'Triển khai', schedule_name: 'Tạm ứng', due_date: '2027-01-15', amount_before_tax: 30_000_000, tax_amount: 3_000_000, total_amount: 33_000_000, requires_acceptance: 1, acceptance_status: 'Chưa' },
+  ]
+
+  it('12 cột đúng thứ tự, nhãn và kiểu', () => {
+    expect(SCHEDULE_COLUMNS.map((c) => c.label)).toEqual([
+      'STT', 'Hạng mục', 'Tên đợt', 'Kỳ', 'Ngày đến hạn', 'Trước thuế (VND)', 'Tiền thuế (VND)', 'Tổng tiền (VND)',
+      'Nghiệm thu', 'Đề nghị thanh toán', 'Hóa đơn', 'Thanh toán',
+    ])
+    expect(SCHEDULE_COLUMNS.map((c) => c.type)).toEqual([
+      'index', undefined, undefined, undefined, 'date', 'currency', 'currency', 'currency', 'status', 'status', 'status', 'status',
+    ])
+  })
+
+  it('cột ngày và tiền hiển thị DD/MM/YYYY và 1.234.567', () => {
+    const byKey = Object.fromEntries(SCHEDULE_COLUMNS.map((c) => [c.key, c]))
+    expect(cellText(byKey.due_date, rows[0])).toBe('16/01/2027')
+    expect(cellText(byKey.total_amount, rows[1])).toBe('33.000.000')
+  })
+
+  it('periodText rỗng khi không định kỳ', () => {
+    expect(periodText(rows[0])).toBe('01/01/2027 - 31/03/2027')
+    expect(periodText(rows[1])).toBe('')
+  })
+
+  it('trạng thái hiển thị', () => {
+    expect(acceptanceStatusOf(rows[0]).label).toBe('Không cần')
+    expect(acceptanceStatusOf(rows[1])).toMatchObject({ tone: 'amber' })
+    expect(acceptanceStatusOf({ name: 'x', requires_acceptance: 1, acceptance_status: 'Đã ký' }).tone).toBe('green')
+    expect(acceptanceStatusOf({ name: 'x', requires_acceptance: 0, acceptance_status: 'Đã ký' }).label).toBe('Không cần')
+    expect(requestStatusOf({ name: 'x' }).label).toBe('Chưa lập')
+    expect(requestStatusOf({ name: 'x', request_status: 'Đã lập' }).tone).toBe('blue')
+    expect(invoiceStatusOf({ name: 'x' }).label).toBe('Chưa xuất')
+    expect(invoiceStatusOf({ name: 'x', invoice_status: 'Đã xuất', invoice_no: 'AB-01' }).label).toBe('Đã xuất AB-01')
+    expect(paymentStatusOf({ name: 'x' }).label).toBe('Chưa thu')
+    expect(paymentStatusOf({ name: 'x', payment_status: 'Thu một phần' }).tone).toBe('amber')
+    expect(paymentStatusOf({ name: 'x', payment_status: 'Đã thu' }).tone).toBe('green')
+  })
+
+  it('scheduleTotals cộng ba cột; mảng rỗng ra 0', () => {
+    expect(scheduleTotals(rows)).toEqual({ before: 45_000_000, tax: 3_000_000, total: 48_000_000 })
+    expect(scheduleTotals([])).toEqual({ before: 0, tax: 0, total: 0 })
+  })
+
+  it('hợp đồng Nháp hiện hướng dẫn thay cho bảng', () => {
+    expect(MSG_NO_SCHEDULE).toBe('Chưa có lịch thu. Bấm Kích hoạt để sinh các đợt thu.')
+    expect(showScheduleTable('Nháp')).toBe(false)
+    expect(showScheduleTable('Đang hiệu lực')).toBe(true)
+    expect(SCHEDULE_DOCTYPE).toBe('Payment Schedule')
   })
 })

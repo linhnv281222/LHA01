@@ -2,7 +2,7 @@
 // Form thêm mới / cập nhật Hợp đồng, theo mẫu ContractTypeForm.vue.
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Alert, Button, FileUploader, LoadingText, dialog, toast, useCall, useDoc, useDoctype, useList } from 'frappe-ui'
+import { Alert, Button, FileUploader, LoadingText, Tabs, dialog, toast, useCall, useDoc, useDoctype, useList } from 'frappe-ui'
 import {
   FnField,
   FormPage,
@@ -16,6 +16,7 @@ import {
 } from '@/standard'
 import type { ContractCustomer, ContractType, VATRate } from '@/types/doctypes'
 import ContractItemRows from './ContractItemRows.vue'
+import ContractScheduleTab from './ContractScheduleTab.vue'
 import {
   DOCTYPE,
   FORM_RULES,
@@ -35,6 +36,13 @@ import {
   validateItems,
   type Contract,
 } from './contract'
+
+const TABS = [
+  { value: 'info', label: 'Thông tin' },
+  { value: 'schedule', label: 'Lịch thu' },
+]
+const tab = ref<string>('info')
+const scheduleTab = ref<InstanceType<typeof ContractScheduleTab> | null>(null)
 
 const props = defineProps<{ name?: string }>()
 const router = useRouter()
@@ -214,6 +222,7 @@ async function runAction(action: Action) {
     await method.submit()
     toast.success(`${ACTIONS[action].done} ${props.name}.`)
     await doc.reload()
+    await scheduleTab.value?.reload()
   } catch (err) {
     serverError.value = serverErrorMessage(err)
     toast.error(serverError.value)
@@ -238,6 +247,9 @@ async function runAction(action: Action) {
       <Alert v-if="serverError" theme="red" title="Chưa lưu được" :description="serverError" />
       <Alert v-if="locked" theme="amber" title="Hợp đồng đã khóa" :description="lockedMessage(status)" />
 
+      <Tabs v-if="isEdit" v-model="tab" :tabs="TABS" />
+
+      <div v-show="!isEdit || tab === 'info'" class="contents">
       <FormSection title="Thông tin chung" muted>
         <FnField
           v-model="form.contract_no"
@@ -363,6 +375,9 @@ async function runAction(action: Action) {
           @blur="validateField('notes')"
         />
       </FormSection>
+      </div>
+
+      <ContractScheduleTab v-if="isEdit && tab === 'schedule'" ref="scheduleTab" :contract="name as string" :status="status" />
     </template>
 
     <template #actions>

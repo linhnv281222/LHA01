@@ -42,6 +42,7 @@ STATUS_LIQUIDATED = "Đã thanh lý"
 STATUS_CANCELLED = "Đã hủy"
 LOCKED_STATUSES = (STATUS_EXPIRED, STATUS_LIQUIDATED, STATUS_CANCELLED)
 
+PERIOD_DAY = "Ngày"
 PERIOD_MONTHS = {"Tháng": 1, "Quý": 3, "6 tháng": 6, "Năm": 12}
 
 TOLERANCE = 0.01
@@ -65,16 +66,32 @@ def format_vnd(value) -> str:
 	return format_number(round_vnd(value), 0)
 
 
-def recurring_periods(period, period_start, period_end):
+def recurring_periods(period, period_start, period_end, period_days=None):
 	"""Danh sách kỳ thu: [(từ ngày, đến ngày, tỷ lệ so với kỳ đầy đủ)].
 
 	Kỳ cuối vượt ngày kết thúc thì cắt tại ngày kết thúc, tỷ lệ = số ngày thực tế / số ngày của kỳ đầy đủ.
 	Ticket sinh đợt thu dùng lại hàm này để các đợt cộng lại khớp với số tổng của hợp đồng.
 	"""
-	months = PERIOD_MONTHS.get(period)
-	if not months or not period_start or not period_end:
+	if not period_start or not period_end:
 		return []
 	start, end = getdate(period_start), getdate(period_end)
+	if period == PERIOD_DAY:
+		days = int(flt(period_days))
+		if days < 1:
+			return []
+		result = []
+		k = 0
+		while True:
+			p_from = add_days(start, k * days)
+			if p_from > end:
+				break
+			p_to = min(add_days(p_from, days - 1), end)
+			result.append((p_from, p_to, (date_diff(p_to, p_from) + 1) / days))
+			k += 1
+		return result
+	months = PERIOD_MONTHS.get(period)
+	if not months:
+		return []
 	periods = []
 	k = 0
 	while True:
@@ -89,14 +106,20 @@ def recurring_periods(period, period_start, period_end):
 	return periods
 
 
-def recurring_amount(unit_price, period, period_start, period_end) -> int:
+def recurring_amount(unit_price, period, period_start, period_end, period_days=None) -> int:
 	"""Tổng tiền các kỳ (làm tròn từng kỳ)."""
-	return sum(round_vnd(flt(unit_price) * ratio) for _from, _to, ratio in recurring_periods(period, period_start, period_end))
+	return sum(
+		round_vnd(flt(unit_price) * ratio)
+		for _from, _to, ratio in recurring_periods(period, period_start, period_end, period_days)
+	)
 
 
 def has_billed_installments(contract_name: str) -> bool:
-	"""Hợp đồng đã có đợt thu gắn chứng từ (hóa đơn, phiếu thu) chưa. Ticket 4 bổ sung."""
-	return False
+	"""Hợp đồng đã có đợt thu gắn chứng từ chưa (dùng chung cơ chế has_documents)."""
+	from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import has_documents
+
+	rows = frappe.get_all("Payment Schedule", filters={"contract": contract_name}, fields=["*"])
+	return any(has_documents(r) for r in rows)
 
 
 def _empty(value) -> bool:
@@ -208,6 +231,12 @@ class Contract(Document):
 	def _validate_recurring(self, item):
 		self._need_positive(item, item.unit_price, "đơn giá mỗi kỳ trước thuế")
 		self._need(item, item.period, "chu kỳ")
+		if item.period == PERIOD_DAY:
+			self._need_positive(item, item.period_days, "số ngày mỗi kỳ")
+			if cint_neg(item.period_days):
+				frappe.throw(_(MSG_ITEM_POSITIVE).format(item.idx, "số ngày mỗi kỳ"))
+		else:
+			item.period_days = None
 		self._need(item, item.period_start, "ngày bắt đầu kỳ đầu")
 		if _empty(item.period_end) and self.end_date:
 			item.period_end = self.end_date
@@ -243,7 +272,9 @@ class Contract(Document):
 			elif item.billing_type == MULTI:
 				before = flt(item.item_value)
 			elif item.billing_type == RECURRING:
-				before = recurring_amount(item.unit_price, item.period, item.period_start, item.period_end)
+				before = recurring_amount(
+						item.unit_price, item.period, item.period_start, item.period_end, item.period_days
+					)
 			else:
 				before = 0
 			vat = (
@@ -264,6 +295,19 @@ class Contract(Document):
 		self.paid_amount = 0
 		self.outstanding_amount = 0
 
+	# ---- đợt thu ----
+
+	def on_update(self):
+		"""Sinh/xóa đợt thu theo trạng thái, trong cùng giao dịch với lưu."""
+		from contract_tracker.contract_tracker.doctype.payment_schedule import payment_schedule as ps
+
+		if self.status == STATUS_ACTIVE:
+			ps.generate_schedules(self)
+		elif self.status == STATUS_CANCELLED:
+			before = self.get_doc_before_save()
+			if before and before.status == STATUS_ACTIVE:
+				ps.delete_unbilled_schedules(self.name)
+
 	# ---- xóa ----
 
 	def on_trash(self):
@@ -276,9 +320,16 @@ class Contract(Document):
 		# Gọi method qua REST có thể chỉ kiểm quyền đọc, nên kiểm quyền ghi ở đây.
 		self.check_permission("write")
 		self.flags.status_change = True
+		old_status = self.status
 		self.status = new_status
+		# Lỗi khi sinh/xóa đợt thu thì hoàn tác cả việc đổi trạng thái.
+		frappe.db.savepoint("contract_set_status")
 		try:
 			self.save()
+		except Exception:
+			frappe.db.rollback(save_point="contract_set_status")
+			self.status = old_status
+			raise
 		finally:
 			self.flags.status_change = False
 
@@ -288,7 +339,7 @@ class Contract(Document):
 
 	@frappe.whitelist()
 	def activate(self):
-		"""Nháp → Đang hiệu lực. Chưa sinh đợt thu."""
+		"""Nháp → Đang hiệu lực. Đợt thu được sinh trong on_update (cùng giao dịch)."""
 		self.check_permission("write")
 		self._require_status("kích hoạt", (STATUS_DRAFT,))
 		if not self.items:
@@ -297,7 +348,7 @@ class Contract(Document):
 
 	@frappe.whitelist()
 	def cancel_contract(self):
-		"""Nháp hoặc Đang hiệu lực → Đã hủy."""
+		"""Nháp hoặc Đang hiệu lực → Đã hủy. Đợt chưa có chứng từ bị xóa trong on_update."""
 		self.check_permission("write")
 		self._require_status("hủy", (STATUS_DRAFT, STATUS_ACTIVE))
 		if has_billed_installments(self.name):

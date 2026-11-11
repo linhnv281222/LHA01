@@ -1,0 +1,208 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "DT-.YYYY.-.#####",
+ "creation": "2026-11-11 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "contract",
+  "customer",
+  "customer_name",
+  "item_key",
+  "item_name",
+  "schedule_name",
+  "period_from",
+  "period_to",
+  "due_date",
+  "amount_section",
+  "amount_before_tax",
+  "vat_rate",
+  "tax_amount",
+  "total_amount",
+  "requires_acceptance",
+  "status_section",
+  "acceptance_status",
+  "request_status",
+  "invoice_status",
+  "invoice_no",
+  "payment_status",
+  "paid_amount",
+  "is_overdue"
+ ],
+ "fields": [
+  {
+   "fieldname": "contract",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Hợp đồng",
+   "options": "Contract",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "contract.customer",
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Khách hàng",
+   "options": "Contract Customer",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Tên khách hàng",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Mã hạng mục"
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Hạng mục"
+  },
+  {
+   "fieldname": "schedule_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tên đợt"
+  },
+  {
+   "fieldname": "period_from",
+   "fieldtype": "Date",
+   "label": "Kỳ từ"
+  },
+  {
+   "fieldname": "period_to",
+   "fieldtype": "Date",
+   "label": "Kỳ đến"
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Ngày đến hạn"
+  },
+  {
+   "fieldname": "amount_section",
+   "fieldtype": "Section Break",
+   "label": "Số tiền"
+  },
+  {
+   "fieldname": "amount_before_tax",
+   "fieldtype": "Currency",
+   "label": "Trước thuế (VND)"
+  },
+  {
+   "fieldname": "vat_rate",
+   "fieldtype": "Link",
+   "label": "Thuế suất",
+   "options": "VAT Rate"
+  },
+  {
+   "fieldname": "tax_amount",
+   "fieldtype": "Currency",
+   "label": "Tiền thuế (VND)"
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "Tổng tiền (VND)"
+  },
+  {
+   "default": "0",
+   "fieldname": "requires_acceptance",
+   "fieldtype": "Check",
+   "label": "Cần nghiệm thu"
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Trạng thái chứng từ"
+  },
+  {
+   "default": "Chưa",
+   "fieldname": "acceptance_status",
+   "fieldtype": "Select",
+   "label": "Nghiệm thu",
+   "options": "Không cần\nChưa\nĐã ký"
+  },
+  {
+   "default": "Chưa lập",
+   "fieldname": "request_status",
+   "fieldtype": "Select",
+   "label": "Đề nghị thanh toán",
+   "options": "Chưa lập\nĐã lập"
+  },
+  {
+   "default": "Chưa xuất",
+   "fieldname": "invoice_status",
+   "fieldtype": "Select",
+   "label": "Hóa đơn",
+   "options": "Chưa xuất\nĐã xuất"
+  },
+  {
+   "fieldname": "invoice_no",
+   "fieldtype": "Data",
+   "label": "Số hóa đơn"
+  },
+  {
+   "default": "Chưa thu",
+   "fieldname": "payment_status",
+   "fieldtype": "Select",
+   "label": "Thanh toán",
+   "options": "Chưa thu\nThu một phần\nĐã thu"
+  },
+  {
+   "default": "0",
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "label": "Số tiền đã thu (VND)"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_overdue",
+   "fieldtype": "Check",
+   "label": "Quá hạn"
+  }
+ ],
+ "grid_page_length": 50,
+ "in_create": 1,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-11 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Contract Tracker",
+ "name": "Payment Schedule",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Quản lý hợp đồng"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Xem hợp đồng"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "due_date",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "schedule_name",
+ "track_changes": 0
+}

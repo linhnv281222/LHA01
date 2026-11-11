@@ -230,8 +230,19 @@ class IntegrationTestContract(IntegrationTestCase):
 		doc.activate()
 		doc = frappe.get_doc("Contract", doc.name)
 		self.assertEqual(doc.status, "Đang hiệu lực")
-		doc_types = frappe.get_all("DocType", filters={"module": "Contract Tracker"}, pluck="name")
-		self.assertFalse([d for d in doc_types if "Installment" in d])
+		self.assertEqual(frappe.db.count("Payment Schedule", {"contract": doc.name}), 7)
+
+	def test_recurring_by_day(self):
+		periods = recurring_periods("Ngày", "2027-01-01", "2027-02-10", 15)
+		self.assertEqual(len(periods), 3)
+		self.assertEqual([str(p[0]) for p in periods], ["2027-01-01", "2027-01-16", "2027-01-31"])
+		self.assertEqual(str(periods[2][1]), "2027-02-10")
+		self.assertAlmostEqual(periods[2][2], 11 / 15)
+		self.assertEqual(
+			recurring_amount(15_000_000, "Ngày", "2027-01-01", "2027-02-10", 15),
+			15_000_000 * 2 + round_vnd(15_000_000 * 11 / 15),
+		)
+		self.assertEqual(recurring_periods("Ngày", "2027-01-01", "2027-02-10", 0), [])
 
 	def test_activate_without_items(self):
 		doc = make_contract(items=[]).insert()

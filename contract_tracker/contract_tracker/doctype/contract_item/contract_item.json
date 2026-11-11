@@ -22,6 +22,7 @@
   "recurring_section",
   "unit_price",
   "period",
+  "period_days",
   "period_start",
   "period_end",
   "bill_timing",
@@ -130,7 +131,13 @@
    "fieldname": "period",
    "fieldtype": "Select",
    "label": "Chu kỳ",
-   "options": "\nTháng\nQuý\n6 tháng\nNăm"
+   "options": "\nTháng\nQuý\n6 tháng\nNăm\nNgày"
+  },
+  {
+   "depends_on": "eval:doc.period=='Ngày'",
+   "fieldname": "period_days",
+   "fieldtype": "Int",
+   "label": "Số ngày mỗi kỳ"
   },
   {
    "fieldname": "period_start",
@@ -160,7 +167,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-11-11 09:00:00.000000",
+ "modified": "2026-11-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Contract Tracker",
  "name": "Contract Item",

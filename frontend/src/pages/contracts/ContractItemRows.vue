@@ -153,6 +153,17 @@ function removeMilestone(j: number) {
     <div v-else-if="item.billing_type === 'Định kỳ'" class="grid grid-cols-4 gap-x-6 gap-y-4">
       <FnField v-model="item.unit_price" :field="field('unit_price')" label="Đơn giá mỗi kỳ trước thuế" type="currency" unit="VND" required :disabled="disabled" :error="err('unit_price')" />
       <FnField v-model="item.period" :field="field('period')" label="Chu kỳ" type="select" required :options="PERIOD_OPTIONS" :disabled="disabled" :error="err('period')" />
+      <FnField
+        v-if="item.period === 'Ngày'"
+        v-model="item.period_days"
+        :field="field('period_days')"
+        label="Số ngày mỗi kỳ"
+        type="number"
+        unit="ngày"
+        required
+        :disabled="disabled"
+        :error="err('period_days')"
+      />
       <FnField v-model="item.period_start" :field="field('period_start')" label="Ngày bắt đầu kỳ đầu" type="date" required :disabled="disabled" :error="err('period_start')" />
       <FnField
         v-model="item.period_end"
