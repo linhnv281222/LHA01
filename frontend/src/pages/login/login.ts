@@ -12,8 +12,7 @@ export function emptyLoginForm(): LoginForm {
 
 export const LOGIN_RULES: Rules<LoginForm> = {
   usr: { label: 'Email hoặc tên đăng nhập', required: true },
-  // Mật khẩu chỉ gồm khoảng trắng vẫn hợp lệ: chỉ coi là trống khi chuỗi rỗng.
-  pwd: { label: 'Mật khẩu', validate: (v) => (v === '' || v == null ? 'Vui lòng nhập mật khẩu.' : null) },
+  pwd: { label: 'Mật khẩu', required: true },
 }
 
 export const INVALID_LOGIN_MESSAGE = 'Email hoặc mật khẩu không đúng.'
