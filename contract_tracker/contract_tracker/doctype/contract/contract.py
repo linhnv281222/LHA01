@@ -313,8 +313,9 @@ class Contract(Document):
 
 
 def cint_neg(value) -> bool:
-	"""Số ngày được nợ âm thì sai (Int của Frappe đã làm tròn số lẻ về số nguyên)."""
-	return flt(value) < 0
+	"""Số ngày được nợ sai khi âm hoặc là số lẻ (khớp contract.ts)."""
+	number = flt(value)
+	return number < 0 or number != int(number)
 
 
 def _status_word(status: str) -> str:

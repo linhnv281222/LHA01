@@ -325,7 +325,13 @@ async function runAction(action: Action) {
         <div class="space-y-1.5" data-field="contract_file">
           <span class="text-sm-medium text-ink-gray-7">File hợp đồng</span>
           <div class="flex items-center gap-3">
-            <FileUploader @success="(file: { file_url: string }) => (form.contract_file = file.file_url)">
+            <FileUploader
+              :upload-args="
+                isEdit
+                  ? { private: true, doctype: 'Contract', docname: props.name, fieldname: 'contract_file' }
+                  : { private: true }
+              "
+              @success="(file: { file_url: string }) => (form.contract_file = file.file_url)">
               <template #default="{ openFileSelector, uploading }">
                 <Button
                   type="button"
