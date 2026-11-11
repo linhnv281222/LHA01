@@ -19,10 +19,12 @@ describe('kiểm tra ô nhập', () => {
     expect(v.errors.usr).toBe('Vui lòng nhập email hoặc tên đăng nhập.')
     expect(v.errors.pwd).toBe('Vui lòng nhập mật khẩu.')
   })
-  it('chỉ có khoảng trắng vẫn lỗi; đủ cả hai thì hợp lệ', () => {
+  it('email chỉ có khoảng trắng vẫn lỗi; mật khẩu khoảng trắng được chấp nhận; đủ cả hai thì hợp lệ', () => {
     const form = reactive({ usr: '   ', pwd: '  ' })
     const v = useFormValidation(form, LOGIN_RULES)
     expect(v.validateAll()).toBe(false)
+    expect(v.errors.usr).toBeTruthy()
+    expect(v.errors.pwd).toBeFalsy()
     form.usr = 'a@b.vn'
     form.pwd = 'x'
     expect(v.validateAll()).toBe(true)

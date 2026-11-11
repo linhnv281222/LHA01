@@ -59,15 +59,17 @@ async function onSubmit() {
                   <span :class="isEmpty(form.pwd) ? 'text-ink-red-6' : 'text-ink-gray-9'" aria-hidden="true">*</span>
                   <span class="sr-only">(bắt buộc)</span>
                 </label>
-                <Password
-                  id="login-pwd"
-                  v-model="form.pwd"
-                  variant="outline"
-                  autocomplete="current-password"
-                  :aria-invalid="!!errors.pwd"
-                  :aria-describedby="errors.pwd ? 'login-pwd-err' : undefined"
-                  @blur="validateField('pwd')"
-                />
+                <div :class="errors.pwd ? 'pwd-invalid' : ''">
+                  <Password
+                    id="login-pwd"
+                    v-model="form.pwd"
+                    variant="outline"
+                    autocomplete="current-password"
+                    :aria-invalid="!!errors.pwd"
+                    :aria-describedby="errors.pwd ? 'login-pwd-err' : undefined"
+                    @blur="validateField('pwd')"
+                  />
+                </div>
                 <p v-if="errors.pwd" id="login-pwd-err" class="flex items-center gap-1 text-sm text-ink-red-7" role="alert">
                   <span class="lucide-circle-alert size-3.5 shrink-0" aria-hidden="true" />{{ errors.pwd }}
                 </p>
@@ -88,3 +90,10 @@ async function onSubmit() {
     <footer class="py-3 text-center text-sm text-ink-gray-5">© 2026 Công ty LHA</footer>
   </div>
 </template>
+
+<style scoped>
+/* Tương đương .fn-invalid của FnField (style scoped, không dùng lại được). */
+.pwd-invalid :deep(input) {
+  border-color: var(--outline-red-3);
+}
+</style>
