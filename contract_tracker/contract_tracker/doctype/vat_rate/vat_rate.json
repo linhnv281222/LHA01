@@ -1,0 +1,104 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 0,
+ "autoname": "field:rate_name",
+ "creation": "2026-11-11 08:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "rate_name",
+  "rate",
+  "column_break_1",
+  "is_non_taxable",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "rate_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tên thuế suất",
+   "length": 100,
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "rate",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Tỷ lệ (%)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_non_taxable",
+   "fieldtype": "Check",
+   "label": "Không chịu thuế"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Đang dùng"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-11 08:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Contract Tracker",
+ "name": "VAT Rate",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Quản lý hợp đồng",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Xem hợp đồng"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "rate_name",
+ "show_title_field_in_link": 1,
+ "sort_field": "rate",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "rate_name",
+ "track_changes": 1
+}

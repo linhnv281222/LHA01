@@ -21,6 +21,38 @@ export const router = createRouter({
       component: () => import('./pages/contract-types/ContractTypeForm.vue'),
       props: true,
     },
+    {
+      path: '/vat-rates',
+      name: 'VatRateList',
+      component: () => import('./pages/vat-rates/VatRateList.vue'),
+    },
+    {
+      path: '/vat-rates/new',
+      name: 'VatRateNew',
+      component: () => import('./pages/vat-rates/VatRateForm.vue'),
+    },
+    {
+      path: '/vat-rates/:name/edit',
+      name: 'VatRateEdit',
+      component: () => import('./pages/vat-rates/VatRateForm.vue'),
+      props: true,
+    },
+    {
+      path: '/customers',
+      name: 'CustomerList',
+      component: () => import('./pages/customers/CustomerList.vue'),
+    },
+    {
+      path: '/customers/new',
+      name: 'CustomerNew',
+      component: () => import('./pages/customers/CustomerForm.vue'),
+    },
+    {
+      path: '/customers/:name/edit',
+      name: 'CustomerEdit',
+      component: () => import('./pages/customers/CustomerForm.vue'),
+      props: true,
+    },
     { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('./pages/NotFound.vue') },
   ],
 })
