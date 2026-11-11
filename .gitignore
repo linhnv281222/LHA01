@@ -1,0 +1,12 @@
+.DS_Store
+*.pyc
+*.egg-info
+*.swp
+tags
+node_modules
+__pycache__
+# Sinh ra khi build frontend (vite build); không commit.
+contract_tracker/public/frontend/
+contract_tracker/www/contracts.html
+frontend/node_modules/
+frontend/.cache/

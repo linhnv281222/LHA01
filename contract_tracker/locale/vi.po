@@ -1,0 +1,16 @@
+# Bản dịch tiếng Việt của app contract_tracker.
+# Tên DocType, tên module và mọi chuỗi tiếng Anh hiển thị cho người dùng phải có bản dịch ở đây.
+msgid ""
+msgstr ""
+"Project-Id-Version: contract_tracker\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: vi_VN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Contract Tracker"
+msgstr "Theo dõi hợp đồng"
+
+msgid "Contract Type"
+msgstr "Loại hợp đồng"

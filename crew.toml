@@ -1,0 +1,40 @@
+[project]
+name = "contract-tracker"
+
+[verify]
+# Giao diện (chuẩn UI/UX, kiểu, test, build) rồi chép mã vào bench test, migrate, chạy test Python.
+# Mã thoát khác 0 là thất bại.
+commands = ["bash scripts/verify.sh"]
+timeout_seconds = 1200
+
+[agent]
+# Lệnh Bash mà agent Dev được phép chạy (cú pháp quyền của Claude Code).
+allowed_bash = ["bash scripts/verify.sh*", "python3 -m json.tool *"]
+# Agent không được sửa các đường dẫn này (kết thúc bằng "/" là cả thư mục).
+# pyproject.toml, package.json, package-lock.json được bảo vệ: thêm thư viện mới phải do người quyết.
+# frontend/src/standard/ là bộ thành phần chuẩn UI/UX: muốn đổi chuẩn thì người làm, có người duyệt.
+protected_paths = [
+  "crew.toml", "scripts/", ".claude/", ".github/", "pyproject.toml",
+  "frontend/src/standard/", "frontend/package.json", "frontend/package-lock.json",
+  "frontend/vite.config.ts", "frontend/vitest.config.ts", "frontend/tailwind.config.js",
+  "frontend/postcss.config.js", "frontend/tsconfig.json", "frontend/index.html",
+]
+
+[preview]
+mode = "command"
+health_path = "/api/method/ping"
+startup_timeout_seconds = 600
+# Bench preview chỉ chạy được một bản chạy thử tại một thời điểm.
+max_active = 1
+# Danh sách mặc định; BA và Dev thêm đường dẫn của màn hình mới.
+# Giao diện Vue: /contracts/<man-hinh>; Desk: /app/<ten-doctype>.
+screenshots = ["/contracts/contract-types", "/contracts/contract-types/new"]
+
+[preview.command]
+run = "bash scripts/preview.sh"
+
+[preview.login]
+# Desk của Frappe cần đăng nhập. Mật khẩu nằm trong file trên máy chạy devcrew, không nằm trong repo.
+path = "/api/method/login"
+user = "Administrator"
+password_file = "~/frappe/preview-admin-password"

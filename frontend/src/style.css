@@ -1,0 +1,26 @@
+@import 'frappe-ui/style.css';
+
+/* Chuẩn UI/UX nội bộ: chữ thân bài 14px, line-height ≥ 1.5 cho đoạn văn, màu chủ đạo #1D5FA8. */
+html,
+body {
+  background: var(--surface-base);
+  color: var(--ink-gray-8);
+}
+
+.fn-primary.fn-primary:not(:disabled) {
+  background-color: #1d5fa8;
+  color: #fff;
+}
+.fn-primary.fn-primary:not(:disabled):hover {
+  background-color: #174c86;
+}
+.fn-primary.fn-primary:not(:disabled):active {
+  background-color: #123d6c;
+}
+
+/* Vùng bấm tối thiểu 25px trên desktop. */
+button,
+[role='button'],
+a {
+  min-height: 25px;
+}
