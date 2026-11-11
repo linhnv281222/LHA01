@@ -3,5 +3,13 @@
 import type { MenuItem } from '@/standard'
 
 export const MENU: MenuItem[] = [
-  { label: 'Loại hợp đồng', route: '/contract-types', icon: 'lucide-tags' },
+  {
+    label: 'Danh mục',
+    icon: 'lucide-folder',
+    children: [
+      { label: 'Loại hợp đồng', route: '/contract-types', icon: 'lucide-tags' },
+      { label: 'Thuế suất', route: '/vat-rates', icon: 'lucide-percent' },
+      { label: 'Khách hàng', route: '/customers', icon: 'lucide-building-2' },
+    ],
+  },
 ]

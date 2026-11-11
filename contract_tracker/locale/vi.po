@@ -15,5 +15,11 @@ msgstr "Theo dõi hợp đồng"
 msgid "Contract Type"
 msgstr "Loại hợp đồng"
 
+msgid "VAT Rate"
+msgstr "Thuế suất"
+
+msgid "Contract Customer"
+msgstr "Khách hàng"
+
 msgid "Your account has been locked and will resume after {0} seconds"
 msgstr "Tài khoản tạm bị khóa, vui lòng thử lại sau {0} giây"
