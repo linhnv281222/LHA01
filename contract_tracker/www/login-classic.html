@@ -1,0 +1,11 @@
+{% extends "frappe/www/login.html" %}
+
+{% block script %}
+{{ super() }}
+<script>
+	// Link "quay lại đăng nhập" trong phần quên mật khẩu đưa về trang đăng nhập mới.
+	document.querySelectorAll('.for-forgot a[href="#login"]').forEach(function (a) {
+		a.setAttribute("href", "/login");
+	});
+</script>
+{% endblock %}

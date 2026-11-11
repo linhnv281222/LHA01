@@ -2,10 +2,20 @@
 import frappe
 from frappe.utils import get_fullname
 
+from contract_tracker.login import safe_redirect
+
 no_cache = 1
 
 
 def get_context(context):
+	if frappe.request.path.rstrip("/") == "/login":
+		if frappe.session.user != "Guest":
+			frappe.local.flags.redirect_location = safe_redirect(frappe.form_dict.get("redirect-to"))
+			raise frappe.Redirect
+		# Khách: không tạo phiên hay token; đăng nhập đi qua cơ chế mặc định của Frappe.
+		context.boot = {"session_user": "Guest", "csrf_token": "", "site_name": frappe.local.site}
+		return context
+
 	if frappe.session.user == "Guest":
 		frappe.local.flags.redirect_location = "/login?redirect-to=" + frappe.utils.quote(frappe.request.path)
 		raise frappe.Redirect

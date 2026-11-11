@@ -8,6 +8,7 @@ app_license = "mit"
 # Giao diện Vue (Frappe UI) phục vụ ở /contracts; mọi đường dẫn con trả về cùng trang www/contracts.
 website_route_rules = [
 	{"from_route": "/contracts/<path:app_path>", "to_route": "contracts"},
+	{"from_route": "/login", "to_route": "contracts"},
 ]
 
 # Apps
