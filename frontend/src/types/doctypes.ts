@@ -122,7 +122,9 @@ export interface ContractItem {
   /** Đơn giá mỗi kỳ trước thuế (VND) */
   unit_price?: number | null
   /** Chu kỳ */
-  period?: "Th\u00e1ng" | "Qu\u00fd" | "6 th\u00e1ng" | "N\u0103m" | null
+  period?: "Th\u00e1ng" | "Qu\u00fd" | "6 th\u00e1ng" | "N\u0103m" | "Ng\u00e0y" | null
+  /** Số ngày mỗi kỳ */
+  period_days?: number | null
   /** Ngày bắt đầu kỳ đầu */
   period_start?: string | null
   /** Ngày kết thúc */
@@ -177,6 +179,58 @@ export interface ContractType {
   is_active?: 0 | 1
   /** Mô tả */
   description?: string | null
+}
+
+/** DocType "Payment Schedule" (contract_tracker/contract_tracker/doctype/payment_schedule/payment_schedule.json) */
+export interface PaymentSchedule {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  /** Hợp đồng */
+  contract: string
+  /** Khách hàng */
+  customer?: string | null
+  /** Tên khách hàng */
+  customer_name?: string | null
+  /** Mã hạng mục */
+  item_key?: string | null
+  /** Hạng mục */
+  item_name?: string | null
+  /** Tên đợt */
+  schedule_name?: string | null
+  /** Kỳ từ */
+  period_from?: string | null
+  /** Kỳ đến */
+  period_to?: string | null
+  /** Ngày đến hạn */
+  due_date?: string | null
+  /** Trước thuế (VND) */
+  amount_before_tax?: number | null
+  /** Thuế suất */
+  vat_rate?: string | null
+  /** Tiền thuế (VND) */
+  tax_amount?: number | null
+  /** Tổng tiền (VND) */
+  total_amount?: number | null
+  /** Cần nghiệm thu */
+  requires_acceptance?: 0 | 1
+  /** Nghiệm thu */
+  acceptance_status?: "Kh\u00f4ng c\u1ea7n" | "Ch\u01b0a" | "\u0110\u00e3 k\u00fd" | null
+  /** Đề nghị thanh toán */
+  request_status?: "Ch\u01b0a l\u1eadp" | "\u0110\u00e3 l\u1eadp" | null
+  /** Hóa đơn */
+  invoice_status?: "Ch\u01b0a xu\u1ea5t" | "\u0110\u00e3 xu\u1ea5t" | null
+  /** Số hóa đơn */
+  invoice_no?: string | null
+  /** Thanh toán */
+  payment_status?: "Ch\u01b0a thu" | "Thu m\u1ed9t ph\u1ea7n" | "\u0110\u00e3 thu" | null
+  /** Số tiền đã thu (VND) */
+  paid_amount?: number | null
+  /** Quá hạn */
+  is_overdue?: 0 | 1
 }
 
 /** DocType "VAT Rate" (contract_tracker/contract_tracker/doctype/vat_rate/vat_rate.json) */

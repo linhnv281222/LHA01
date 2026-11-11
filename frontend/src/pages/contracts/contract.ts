@@ -5,6 +5,7 @@ import {
   COMMON_STATUS,
   checkField,
   formatCurrency,
+  formatDate,
   formatNumber,
   lowerFirst,
   type Column,
@@ -155,7 +156,7 @@ export type MilestoneInput = 'Số tiền' | 'Phần trăm'
 
 export const BILLING_TYPES: BillingType[] = ['Một lần', 'Nhiều đợt', 'Định kỳ']
 export const MILESTONE_INPUTS: MilestoneInput[] = ['Số tiền', 'Phần trăm']
-export const PERIODS = ['Tháng', 'Quý', '6 tháng', 'Năm']
+export const PERIODS = ['Tháng', 'Quý', '6 tháng', 'Năm', 'Ngày']
 export const BILL_TIMINGS = ['Đầu kỳ', 'Cuối kỳ']
 
 export interface MilestoneForm {
@@ -183,6 +184,7 @@ export interface ItemForm {
   // Định kỳ
   unit_price: number | null
   period: string
+  period_days: number | null
   period_start: string
   period_end: string
   bill_timing: string
@@ -221,6 +223,7 @@ export function emptyItem(): ItemForm {
     milestones: [],
     unit_price: null,
     period: '',
+    period_days: null,
     period_start: '',
     period_end: '',
     bill_timing: 'Đầu kỳ',
@@ -321,6 +324,10 @@ export function validateItems(form: Pick<ContractForm, 'items' | 'end_date'>): R
     } else if (item.billing_type === 'Định kỳ') {
       positive('unit_price', item.unit_price, 'đơn giá mỗi kỳ trước thuế')
       need('period', item.period, 'chu kỳ')
+      if (item.period === 'Ngày' && need('period_days', item.period_days, 'số ngày mỗi kỳ')) {
+        const d = Number(item.period_days)
+        if (!Number.isInteger(d) || d < 1) errors[key('period_days')] = fmt(MSG_ITEM_POSITIVE, n, 'số ngày mỗi kỳ')
+      }
       need('period_start', item.period_start, 'ngày bắt đầu kỳ đầu')
       const periodEnd = item.period_end || form.end_date
       if (item.period_start && periodEnd && periodEnd < item.period_start) {
@@ -402,6 +409,7 @@ export interface ItemPayload {
   milestone_input?: MilestoneInput
   unit_price?: number | null
   period?: string | null
+  period_days?: number | null
   period_start?: string | null
   period_end?: string | null
   bill_timing?: string
@@ -450,6 +458,7 @@ function itemPayload(item: ItemForm): ItemPayload {
     ...base,
     unit_price: item.unit_price,
     period: nul(item.period),
+    period_days: item.period === 'Ngày' ? item.period_days : null,
     period_start: nul(item.period_start),
     period_end: nul(item.period_end),
     bill_timing: item.bill_timing,
@@ -519,6 +528,7 @@ function itemFromDoc(i: ContractItem, milestones: ContractMilestone[]): ItemForm
         : [],
     unit_price: numOrNull(i.unit_price),
     period: i.period ?? '',
+    period_days: numOrNull(i.period_days),
     period_start: i.period_start ?? '',
     period_end: i.period_end ?? '',
     bill_timing: i.bill_timing || 'Đầu kỳ',
@@ -544,3 +554,180 @@ export function fromDoc(doc: Contract): ContractForm {
     items: items.length ? items : [emptyItem()],
   }
 }
+
+// ---- Kỳ định kỳ (bản TypeScript của recurring_periods ở contract.py) ----
+
+export interface PeriodRange {
+  from: string
+  to: string
+  /** Tỷ lệ so với kỳ đầy đủ (kỳ cuối lẻ < 1). */
+  ratio: number
+}
+
+const PERIOD_MONTHS: Record<string, number> = { 'Tháng': 1, 'Quý': 3, '6 tháng': 6, 'Năm': 12 }
+
+const pad = (n: number) => String(n).padStart(2, '0')
+const toIso = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+function parseIso(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
+}
+const DAY_MS = 86_400_000
+const addDays = (d: Date, n: number) => new Date(d.getTime() + n * DAY_MS)
+const diffDays = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / DAY_MS)
+/** Cộng tháng, kẹp ngày cuối tháng như add_months của Frappe (31/01 + 1 tháng = 28/02). */
+function addMonths(d: Date, n: number): Date {
+  const total = d.getUTCFullYear() * 12 + d.getUTCMonth() + n
+  const y = Math.floor(total / 12)
+  const m = total % 12
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+  return new Date(Date.UTC(y, m, Math.min(d.getUTCDate(), last)))
+}
+
+/** Danh sách kỳ thu từ ngày bắt đầu đến ngày kết thúc; kỳ cuối vượt thì cắt và tính tỷ lệ theo số ngày thực tế. */
+export function recurringPeriods(
+  period: string,
+  start: string,
+  end: string,
+  periodDays?: number | null,
+): PeriodRange[] {
+  if (!start || !end) return []
+  const s = parseIso(start)
+  const e = parseIso(end)
+  const result: PeriodRange[] = []
+  if (period === 'Ngày') {
+    const n = Math.floor(Number(periodDays ?? 0))
+    if (!(n >= 1)) return []
+    for (let k = 0; ; k++) {
+      const from = addDays(s, k * n)
+      if (from > e) break
+      const to = addDays(from, n - 1) < e ? addDays(from, n - 1) : e
+      result.push({ from: toIso(from), to: toIso(to), ratio: (diffDays(to, from) + 1) / n })
+    }
+    return result
+  }
+  const months = PERIOD_MONTHS[period]
+  if (!months) return []
+  for (let k = 0; ; k++) {
+    const from = addMonths(s, k * months)
+    if (from > e) break
+    const fullTo = addDays(addMonths(s, (k + 1) * months), -1)
+    const to = fullTo < e ? fullTo : e
+    const ratio = to.getTime() === fullTo.getTime() ? 1 : (diffDays(to, from) + 1) / (diffDays(fullTo, from) + 1)
+    result.push({ from: toIso(from), to: toIso(to), ratio })
+  }
+  return result
+}
+
+// ---- Tab Lịch thu (đợt thu, chỉ đọc) ----
+
+export const SCHEDULE_DOCTYPE = 'Payment Schedule'
+export const MSG_NO_SCHEDULE = 'Chưa có lịch thu. Bấm Kích hoạt để sinh các đợt thu.'
+
+export interface ScheduleRow {
+  name: string
+  item_name?: string | null
+  schedule_name?: string | null
+  period_from?: string | null
+  period_to?: string | null
+  due_date?: string | null
+  amount_before_tax?: number | null
+  tax_amount?: number | null
+  total_amount?: number | null
+  requires_acceptance?: 0 | 1 | boolean | null
+  acceptance_status?: string | null
+  request_status?: string | null
+  invoice_status?: string | null
+  invoice_no?: string | null
+  payment_status?: string | null
+}
+
+export const SCHEDULE_FIELDS: (keyof ScheduleRow)[] = [
+  'name',
+  'item_name',
+  'schedule_name',
+  'period_from',
+  'period_to',
+  'due_date',
+  'amount_before_tax',
+  'tax_amount',
+  'total_amount',
+  'requires_acceptance',
+  'acceptance_status',
+  'request_status',
+  'invoice_status',
+  'invoice_no',
+  'payment_status',
+]
+
+const NO_ACCEPTANCE: StatusDef = { label: 'Không cần', icon: 'lucide-minus-circle', tone: 'gray' }
+
+export const ACCEPTANCE_STATUS: Record<string, StatusDef> = {
+  'Không cần': NO_ACCEPTANCE,
+  'Chưa': { label: 'Chưa nghiệm thu', icon: 'lucide-hourglass', tone: 'amber' },
+  'Đã ký': { label: 'Đã ký', icon: 'lucide-badge-check', tone: 'green' },
+}
+export const REQUEST_STATUS: Record<string, StatusDef> = {
+  'Chưa lập': { label: 'Chưa lập', icon: 'lucide-file-minus', tone: 'gray' },
+  'Đã lập': { label: 'Đã lập', icon: 'lucide-file-check', tone: 'blue' },
+}
+export const INVOICE_STATUS: Record<string, StatusDef> = {
+  'Chưa xuất': { label: 'Chưa xuất', icon: 'lucide-receipt-text', tone: 'gray' },
+  'Đã xuất': { label: 'Đã xuất', icon: 'lucide-receipt-text', tone: 'blue' },
+}
+export const PAYMENT_STATUS: Record<string, StatusDef> = {
+  'Chưa thu': { label: 'Chưa thu', icon: 'lucide-circle-dashed', tone: 'gray' },
+  'Thu một phần': { label: 'Thu một phần', icon: 'lucide-circle-dot', tone: 'amber' },
+  'Đã thu': { label: 'Đã thu', icon: 'lucide-circle-check', tone: 'green' },
+}
+
+/** Nghiệm thu: "Không cần" khi đợt không cần nghiệm thu, bất kể giá trị đã lưu. */
+export function acceptanceStatusOf(row: ScheduleRow): StatusDef {
+  if (!row.requires_acceptance) return NO_ACCEPTANCE
+  return ACCEPTANCE_STATUS[row.acceptance_status || 'Chưa'] ?? ACCEPTANCE_STATUS['Chưa']
+}
+export function requestStatusOf(row: ScheduleRow): StatusDef {
+  return REQUEST_STATUS[row.request_status || 'Chưa lập'] ?? REQUEST_STATUS['Chưa lập']
+}
+export function invoiceStatusOf(row: ScheduleRow): StatusDef {
+  const def = INVOICE_STATUS[row.invoice_status || 'Chưa xuất'] ?? INVOICE_STATUS['Chưa xuất']
+  return row.invoice_status === 'Đã xuất' && row.invoice_no ? { ...def, label: `Đã xuất ${row.invoice_no}` } : def
+}
+export function paymentStatusOf(row: ScheduleRow): StatusDef {
+  return PAYMENT_STATUS[row.payment_status || 'Chưa thu'] ?? PAYMENT_STATUS['Chưa thu']
+}
+
+/** "dd/mm/yyyy - dd/mm/yyyy"; rỗng nếu đợt không định kỳ. */
+export function periodText(row: Pick<ScheduleRow, 'period_from' | 'period_to'>): string {
+  if (!row.period_from || !row.period_to) return ''
+  return `${formatDate(row.period_from)} - ${formatDate(row.period_to)}`
+}
+
+export const SCHEDULE_COLUMNS: Column<ScheduleRow>[] = [
+  { key: '_index', label: 'STT', width: 56, type: 'index' },
+  { key: 'item_name', label: 'Hạng mục', width: 180 },
+  { key: 'schedule_name', label: 'Tên đợt', width: 220 },
+  { key: '_period', label: 'Kỳ', width: 220, format: periodText },
+  { key: 'due_date', label: 'Ngày đến hạn', width: 120, type: 'date' },
+  { key: 'amount_before_tax', label: 'Trước thuế (VND)', width: 150, type: 'currency' },
+  { key: 'tax_amount', label: 'Tiền thuế (VND)', width: 140, type: 'currency' },
+  { key: 'total_amount', label: 'Tổng tiền (VND)', width: 150, type: 'currency' },
+  { key: 'acceptance_status', label: 'Nghiệm thu', width: 150, type: 'status', status: acceptanceStatusOf },
+  { key: 'request_status', label: 'Đề nghị thanh toán', width: 160, type: 'status', status: requestStatusOf },
+  { key: 'invoice_status', label: 'Hóa đơn', width: 160, type: 'status', status: invoiceStatusOf },
+  { key: 'payment_status', label: 'Thanh toán', width: 150, type: 'status', status: paymentStatusOf },
+]
+
+/** Dòng Tổng của bảng Lịch thu. */
+export function scheduleTotals(rows: Pick<ScheduleRow, 'amount_before_tax' | 'tax_amount' | 'total_amount'>[]) {
+  const sum = (pick: (r: (typeof rows)[number]) => number | null | undefined) =>
+    rows.reduce((acc, r) => acc + Number(pick(r) ?? 0), 0)
+  return {
+    before: sum((r) => r.amount_before_tax),
+    tax: sum((r) => r.tax_amount),
+    total: sum((r) => r.total_amount),
+  }
+}
+
+/** Hợp đồng Nháp chưa có đợt: hiện hướng dẫn thay cho bảng. */
+export const showScheduleTable = (status: string | undefined | null) => status !== 'Nháp'
