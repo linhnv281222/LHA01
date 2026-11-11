@@ -53,6 +53,22 @@ export const router = createRouter({
       component: () => import('./pages/customers/CustomerForm.vue'),
       props: true,
     },
+    {
+      path: '/contracts',
+      name: 'ContractList',
+      component: () => import('./pages/contracts/ContractList.vue'),
+    },
+    {
+      path: '/contracts/new',
+      name: 'ContractNew',
+      component: () => import('./pages/contracts/ContractForm.vue'),
+    },
+    {
+      path: '/contracts/:name/edit',
+      name: 'ContractEdit',
+      component: () => import('./pages/contracts/ContractForm.vue'),
+      props: true,
+    },
     { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('./pages/NotFound.vue') },
   ],
 })

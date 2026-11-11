@@ -3,6 +3,7 @@
 import type { MenuItem } from '@/standard'
 
 export const MENU: MenuItem[] = [
+  { label: 'Hợp đồng', route: '/contracts', icon: 'lucide-file-text' },
   {
     label: 'Danh mục',
     icon: 'lucide-folder',
