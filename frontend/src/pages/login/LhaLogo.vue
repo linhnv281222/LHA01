@@ -11,7 +11,7 @@ defineProps<{ size: 'lg' | 'sm' }>()
     aria-label="Logo Công ty LHA"
     :class="
       size === 'lg'
-        ? 'flex size-28 items-center justify-center rounded-3xl bg-surface-white text-4xl font-bold text-fn-brand'
+        ? 'flex size-28 items-center justify-center rounded-3xl border-4 border-white bg-surface-white text-4xl font-bold text-fn-brand'
         : 'mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-fn-brand text-xl font-bold text-ink-white lg:hidden'
     "
   >

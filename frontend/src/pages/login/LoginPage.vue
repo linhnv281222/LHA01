@@ -32,7 +32,7 @@ async function onSubmit() {
 <template>
   <div class="flex min-h-screen flex-col overflow-x-hidden bg-surface-base text-base text-ink-gray-8">
     <div class="flex flex-1">
-      <section class="hidden flex-col items-center justify-center gap-6 bg-fn-brand px-12 text-center text-ink-white lg:flex lg:w-3/5">
+      <section class="hidden flex-col items-center justify-center gap-6 bg-fn-brand px-12 text-center text-white lg:flex lg:w-3/5">
         <LhaLogo size="lg" />
         <h1 class="text-3xl font-bold">CÔNG TY LHA</h1>
         <p class="max-w-md text-lg">Quản lý hợp đồng và thu tiền tập trung, minh bạch</p>
