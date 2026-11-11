@@ -14,6 +14,7 @@ import {
   acceptanceStatusOf,
   applyContractEndDate,
   invoiceStatusOf,
+  overdueStatusOf,
   paymentStatusOf,
   periodText,
   recurringPeriods,
@@ -488,14 +489,25 @@ describe('tab Lịch thu', () => {
     { name: 'b', item_name: 'Triển khai', schedule_name: 'Tạm ứng', due_date: '2027-01-15', amount_before_tax: 30_000_000, tax_amount: 3_000_000, total_amount: 33_000_000, requires_acceptance: 1, acceptance_status: 'Chưa' },
   ]
 
-  it('12 cột đúng thứ tự, nhãn và kiểu', () => {
+  it('13 cột đúng thứ tự, nhãn và kiểu', () => {
     expect(SCHEDULE_COLUMNS.map((c) => c.label)).toEqual([
       'STT', 'Hạng mục', 'Tên đợt', 'Kỳ', 'Ngày đến hạn', 'Trước thuế (VND)', 'Tiền thuế (VND)', 'Tổng tiền (VND)',
-      'Nghiệm thu', 'Đề nghị thanh toán', 'Hóa đơn', 'Thanh toán',
+      'Nghiệm thu', 'Đề nghị thanh toán', 'Hóa đơn', 'Thanh toán', 'Quá hạn',
     ])
     expect(SCHEDULE_COLUMNS.map((c) => c.type)).toEqual([
-      'index', undefined, undefined, undefined, 'date', 'currency', 'currency', 'currency', 'status', 'status', 'status', 'status',
+      'index', undefined, undefined, undefined, 'date', 'currency', 'currency', 'currency', 'status', 'status', 'status', 'status', 'status',
     ])
+  })
+
+  it('overdueStatusOf: Quá hạn đỏ có icon, ngược lại Không', () => {
+    expect(overdueStatusOf({ name: 'x', is_overdue: 1 })).toEqual({ label: 'Quá hạn', icon: 'lucide-alarm-clock', tone: 'red' })
+    expect(overdueStatusOf({ name: 'x', is_overdue: 0 }).label).toBe('Không')
+    expect(overdueStatusOf({ name: 'x' }).tone).toBe('gray')
+  })
+
+  it('paymentStatusOf ghép số đã thu vào nhãn', () => {
+    expect(paymentStatusOf({ name: 'x', payment_status: 'Thu một phần', paid_amount: 7_000_000 }).label).toBe('Thu một phần 7.000.000')
+    expect(paymentStatusOf({ name: 'x', payment_status: 'Chưa thu', paid_amount: 0 }).label).toBe('Chưa thu')
   })
 
   it('cột ngày và tiền hiển thị DD/MM/YYYY và 1.234.567', () => {

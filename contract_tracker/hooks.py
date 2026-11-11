@@ -176,6 +176,8 @@ after_install = "contract_tracker.setup.ensure_vat_rates"
 # Scheduled Tasks
 # ---------------
 
+scheduler_events = {"daily": ["contract_tracker.tasks.daily"]}
+
 # scheduler_events = {
 # 	"all": [
 # 		"contract_tracker.tasks.all"

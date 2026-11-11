@@ -77,6 +77,9 @@ const totals = computed(() => ({
   before: doc?.doc?.total_before_tax ?? 0,
   tax: doc?.doc?.total_tax ?? 0,
   after: doc?.doc?.total_after_tax ?? 0,
+  invoiced: doc?.doc?.invoiced_amount ?? 0,
+  paid: doc?.doc?.paid_amount ?? 0,
+  outstanding: doc?.doc?.outstanding_amount ?? 0,
 }))
 
 // Lựa chọn cho các ô chọn.
@@ -331,6 +334,9 @@ async function runAction(action: Action) {
         <FnField :model-value="totals.before" field="total_before_tax" label="Giá trị trước thuế" type="currency" unit="VND" readonly hint="Tự tính khi lưu." />
         <FnField :model-value="totals.tax" field="total_tax" label="Tiền thuế" type="currency" unit="VND" readonly />
         <FnField :model-value="totals.after" field="total_after_tax" label="Tổng sau thuế" type="currency" unit="VND" readonly :hint="isEdit ? `Hiện tại: ${formatCurrency(totals.after)} VND` : ''" />
+        <FnField :model-value="totals.invoiced" field="invoiced_amount" label="Đã xuất hóa đơn" type="currency" unit="VND" readonly hint="Cập nhật theo hóa đơn." />
+        <FnField :model-value="totals.paid" field="paid_amount" label="Đã thu" type="currency" unit="VND" readonly hint="Cập nhật theo phiếu thu." />
+        <FnField :model-value="totals.outstanding" field="outstanding_amount" label="Còn phải thu" type="currency" unit="VND" readonly />
       </FormSection>
 
       <FormSection title="Tài liệu và ghi chú" :columns="1">

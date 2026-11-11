@@ -195,8 +195,9 @@ class IntegrationTestContract(IntegrationTestCase):
 		self.assertEqual(doc.total_before_tax, 165_000_000)
 		self.assertEqual(doc.total_tax, 10_400_000)
 		self.assertEqual(doc.total_after_tax, 175_400_000)
-		for field in ("invoiced_amount", "paid_amount", "outstanding_amount"):
-			self.assertEqual(doc.get(field), 0)
+		self.assertEqual(doc.invoiced_amount, 0)
+		self.assertEqual(doc.paid_amount, 0)
+		self.assertEqual(doc.outstanding_amount, 175_400_000)
 		by_name = {i.item_name: i for i in doc.items}
 		self.assertEqual(by_name["Triển khai"].tax_amount, 10_000_000)
 		self.assertEqual(by_name["License"].amount_before_tax, 60_000_000)

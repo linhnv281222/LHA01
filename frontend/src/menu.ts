@@ -4,6 +4,8 @@ import type { MenuItem } from '@/standard'
 
 export const MENU: MenuItem[] = [
   { label: 'Hợp đồng', route: '/contracts', icon: 'lucide-file-text' },
+  { label: 'Hóa đơn', route: '/invoices', icon: 'lucide-receipt-text' },
+  { label: 'Phiếu thu', route: '/receipts', icon: 'lucide-wallet' },
   {
     label: 'Danh mục',
     icon: 'lucide-folder',

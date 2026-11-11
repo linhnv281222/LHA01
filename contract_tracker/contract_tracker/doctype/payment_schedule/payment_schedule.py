@@ -3,15 +3,25 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import add_days, cint, flt, getdate
+from frappe.query_builder.functions import Sum
+from frappe.utils import add_days, cint, flt, getdate, today
 
 from contract_tracker.contract_tracker.doctype.contract.contract import (
 	MULTI,
 	ONCE,
 	RECURRING,
+	STATUS_ACTIVE,
+	STATUS_EXPIRED,
+	STATUS_LIQUIDATED,
+	TOLERANCE,
 	recurring_periods,
+	refresh_contract_amounts,
 	round_vnd,
 )
+
+# Đợt của hợp đồng ở các trạng thái này mới được đưa vào hóa đơn và phiếu thu.
+BILLABLE_CONTRACT_STATUSES = (STATUS_ACTIVE, STATUS_EXPIRED, STATUS_LIQUIDATED)
+INVOICE_ACTIVE = "Hiệu lực"
 
 
 class PaymentSchedule(Document):
@@ -23,11 +33,104 @@ class PaymentSchedule(Document):
 
 
 def has_documents(schedule) -> bool:
-	"""Đợt này đã có chứng từ (nghiệm thu, đề nghị, hóa đơn, thu tiền) chưa.
+	"""Đợt này đã có chứng từ (hóa đơn Hiệu lực hoặc tiền thu phân bổ) chưa.
 
-	Ticket này luôn trả về không; các ticket sau bổ sung. Đây là hàm duy nhất trả lời câu hỏi này.
+	Dựa vào hai trường luôn được `refresh_schedules` tính lại từ chứng từ. Đây là hàm duy nhất trả lời câu hỏi này.
 	"""
-	return False
+	invoice_status, paid, name = (schedule.get(k) for k in ("invoice_status", "paid_amount", "name"))
+	if (invoice_status is None or paid is None) and name:
+		invoice_status, paid = frappe.db.get_value("Payment Schedule", name, ["invoice_status", "paid_amount"])
+	return invoice_status == "Đã xuất" or flt(paid) > 0
+
+
+def active_invoice_by_schedule(names, exclude_invoice=None) -> dict:
+	"""{đợt: (mã hóa đơn, số hóa đơn)} của các hóa đơn Hiệu lực chứa đợt."""
+	names = [n for n in names if n]
+	if not names:
+		return {}
+	item = frappe.qb.DocType("Sales Invoice Record Item")
+	inv = frappe.qb.DocType("Sales Invoice Record")
+	query = (
+		frappe.qb.from_(item)
+		.join(inv)
+		.on(item.parent == inv.name)
+		.select(item.schedule, inv.name, inv.invoice_no)
+		.where(item.schedule.isin(names))
+		.where(item.parenttype == "Sales Invoice Record")
+		.where(inv.status == INVOICE_ACTIVE)
+	)
+	if exclude_invoice:
+		query = query.where(inv.name != exclude_invoice)
+	return {schedule: (name, no) for schedule, name, no in query.run()}
+
+
+def paid_by_schedule(names, exclude_receipt=None) -> dict:
+	"""{đợt: tổng tiền đã phân bổ từ các phiếu thu}."""
+	names = [n for n in names if n]
+	if not names:
+		return {}
+	alloc = frappe.qb.DocType("Payment Receipt Allocation")
+	query = (
+		frappe.qb.from_(alloc)
+		.select(alloc.schedule, Sum(alloc.allocated_amount))
+		.where(alloc.schedule.isin(names))
+		.where(alloc.parenttype == "Payment Receipt")
+		.groupby(alloc.schedule)
+	)
+	if exclude_receipt:
+		query = query.where(alloc.parent != exclude_receipt)
+	return {schedule: flt(total) for schedule, total in query.run()}
+
+
+def outstanding_of(schedule, exclude_receipt=None) -> float:
+	"""Số còn nợ của đợt = tổng tiền − đã thu từ các phiếu khác."""
+	total = flt(frappe.db.get_value("Payment Schedule", schedule, "total_amount"))
+	return total - paid_by_schedule([schedule], exclude_receipt).get(schedule, 0)
+
+
+def compute_schedule_state(total, paid, due_date, invoice_no) -> dict:
+	"""Trạng thái đợt từ số liệu chứng từ (hàm thuần)."""
+	total, paid = flt(total), flt(paid)
+	owes = total - paid > TOLERANCE
+	if paid <= 0:
+		payment_status = "Chưa thu"
+	elif owes:
+		payment_status = "Thu một phần"
+	else:
+		payment_status = "Đã thu"
+	return {
+		"invoice_status": "Đã xuất" if invoice_no else "Chưa xuất",
+		"invoice_no": invoice_no or None,
+		"payment_status": payment_status,
+		"paid_amount": paid,
+		"is_overdue": 1 if due_date and owes and getdate(due_date) < getdate(today()) else 0,
+	}
+
+
+def refresh_schedules(names, exclude_receipt=None):
+	"""Tính lại trạng thái các đợt từ toàn bộ hóa đơn Hiệu lực và phiếu thu, rồi số tổng của hợp đồng.
+
+	Ghi bằng db.set_value để không chạy save Đợt thu/Hợp đồng (hợp đồng Hết hạn, Đã thanh lý bị khóa sửa).
+	"""
+	names = sorted({n for n in names if n})
+	if not names:
+		return
+	rows = frappe.get_all(
+		"Payment Schedule",
+		filters={"name": ["in", names]},
+		fields=["name", "contract", "total_amount", "due_date"],
+	)
+	found = [r.name for r in rows]
+	invoices = active_invoice_by_schedule(found)
+	paid = paid_by_schedule(found, exclude_receipt)
+	contracts = set()
+	for row in rows:
+		invoice_no = invoices.get(row.name, (None, None))[1]
+		state = compute_schedule_state(row.total_amount, paid.get(row.name, 0), row.due_date, invoice_no)
+		frappe.db.set_value("Payment Schedule", row.name, state, update_modified=False)
+		contracts.add(row.contract)
+	for contract in contracts:
+		refresh_contract_amounts(contract)
 
 
 def _fmt(value) -> str:

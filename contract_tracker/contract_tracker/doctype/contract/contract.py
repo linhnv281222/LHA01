@@ -290,10 +290,10 @@ class Contract(Document):
 		self.total_before_tax = total_before
 		self.total_tax = total_tax
 		self.total_after_tax = total_before + total_tax
-		# Ticket 4 tính các số dưới đây từ hóa đơn và phiếu thu.
-		self.invoiced_amount = 0
-		self.paid_amount = 0
-		self.outstanding_amount = 0
+		amounts = contract_amounts(self.name, self.total_after_tax)
+		self.invoiced_amount = amounts["invoiced_amount"]
+		self.paid_amount = amounts["paid_amount"]
+		self.outstanding_amount = amounts["outstanding_amount"]
 
 	# ---- đợt thu ----
 
@@ -361,6 +361,34 @@ class Contract(Document):
 		self.check_permission("write")
 		self._require_status("thanh lý", (STATUS_ACTIVE,))
 		self._set_status(STATUS_LIQUIDATED)
+
+
+def contract_amounts(name, total_after_tax) -> dict:
+	"""Số tổng thu tiền của hợp đồng, tính lại từ các đợt thu (đã được cập nhật từ hóa đơn và phiếu thu)."""
+	rows = (
+		frappe.get_all(
+			"Payment Schedule",
+			filters={"contract": name},
+			fields=["total_amount", "paid_amount", "invoice_status"],
+		)
+		if name
+		else []
+	)
+	invoiced = sum(flt(r.total_amount) for r in rows if r.invoice_status == "Đã xuất")
+	paid = sum(flt(r.paid_amount) for r in rows)
+	return {
+		"invoiced_amount": invoiced,
+		"paid_amount": paid,
+		"outstanding_amount": flt(total_after_tax) - paid,
+	}
+
+
+def refresh_contract_amounts(name):
+	"""Ghi lại số tổng của hợp đồng mà không chạy save (hợp đồng Hết hạn/Đã thanh lý đang bị khóa sửa)."""
+	total = frappe.db.get_value("Contract", name, "total_after_tax")
+	if total is None:
+		return
+	frappe.db.set_value("Contract", name, contract_amounts(name, total), update_modified=False)
 
 
 def cint_neg(value) -> bool:

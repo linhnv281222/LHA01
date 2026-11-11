@@ -640,6 +640,8 @@ export interface ScheduleRow {
   invoice_status?: string | null
   invoice_no?: string | null
   payment_status?: string | null
+  paid_amount?: number | null
+  is_overdue?: 0 | 1 | boolean | null
 }
 
 export const SCHEDULE_FIELDS: (keyof ScheduleRow)[] = [
@@ -658,6 +660,8 @@ export const SCHEDULE_FIELDS: (keyof ScheduleRow)[] = [
   'invoice_status',
   'invoice_no',
   'payment_status',
+  'paid_amount',
+  'is_overdue',
 ]
 
 const NO_ACCEPTANCE: StatusDef = { label: 'Không cần', icon: 'lucide-minus-circle', tone: 'gray' }
@@ -693,8 +697,19 @@ export function invoiceStatusOf(row: ScheduleRow): StatusDef {
   const def = INVOICE_STATUS[row.invoice_status || 'Chưa xuất'] ?? INVOICE_STATUS['Chưa xuất']
   return row.invoice_status === 'Đã xuất' && row.invoice_no ? { ...def, label: `Đã xuất ${row.invoice_no}` } : def
 }
+/** Thanh toán: nhãn trạng thái kèm số đã thu khi có thu tiền, ví dụ "Thu một phần 7.000.000". */
 export function paymentStatusOf(row: ScheduleRow): StatusDef {
-  return PAYMENT_STATUS[row.payment_status || 'Chưa thu'] ?? PAYMENT_STATUS['Chưa thu']
+  const def = PAYMENT_STATUS[row.payment_status || 'Chưa thu'] ?? PAYMENT_STATUS['Chưa thu']
+  const paid = Number(row.paid_amount ?? 0)
+  return paid > 0 ? { ...def, label: `${def.label} ${formatCurrency(paid)}` } : def
+}
+
+export const OVERDUE_STATUS: Record<'yes' | 'no', StatusDef> = {
+  yes: { label: 'Quá hạn', icon: 'lucide-alarm-clock', tone: 'red' },
+  no: { label: 'Không', icon: 'lucide-minus', tone: 'gray' },
+}
+export function overdueStatusOf(row: ScheduleRow): StatusDef {
+  return row.is_overdue ? OVERDUE_STATUS.yes : OVERDUE_STATUS.no
 }
 
 /** "dd/mm/yyyy - dd/mm/yyyy"; rỗng nếu đợt không định kỳ. */
@@ -715,7 +730,8 @@ export const SCHEDULE_COLUMNS: Column<ScheduleRow>[] = [
   { key: 'acceptance_status', label: 'Nghiệm thu', width: 150, type: 'status', status: acceptanceStatusOf },
   { key: 'request_status', label: 'Đề nghị thanh toán', width: 160, type: 'status', status: requestStatusOf },
   { key: 'invoice_status', label: 'Hóa đơn', width: 160, type: 'status', status: invoiceStatusOf },
-  { key: 'payment_status', label: 'Thanh toán', width: 150, type: 'status', status: paymentStatusOf },
+  { key: 'payment_status', label: 'Thanh toán', width: 230, type: 'status', status: paymentStatusOf },
+  { key: 'is_overdue', label: 'Quá hạn', width: 120, type: 'status', status: overdueStatusOf },
 ]
 
 /** Dòng Tổng của bảng Lịch thu. */
