@@ -1,0 +1,411 @@
+import { describe, expect, it } from 'vitest'
+import { checkField } from '@/standard'
+import type { Contract } from '@/types/doctypes'
+import {
+  COLUMNS,
+  FORM_RULES,
+  MSG_END_BEFORE_START,
+  MSG_END_REQUIRED,
+  STATUSES,
+  applyContractEndDate,
+  canActivate,
+  canCancel,
+  canLiquidate,
+  emptyFilters,
+  emptyForm,
+  emptyItem,
+  emptyMilestone,
+  filtersActive,
+  fromDoc,
+  groupTree,
+  isLocked,
+  lockedMessage,
+  milestoneSummary,
+  onBillingTypeChange,
+  statusOf,
+  toFrappeFilters,
+  toPayload,
+  validateExtra,
+  validateItems,
+  type ContractForm,
+  type ItemForm,
+} from './contract'
+
+function onceItem(over: Partial<ItemForm> = {}): ItemForm {
+  return { ...emptyItem(), item_name: 'Đào tạo', vat_rate: '8%', amount: 5_000_000, due_date: '2027-02-01', ...over }
+}
+function multiItem(over: Partial<ItemForm> = {}): ItemForm {
+  return {
+    ...emptyItem(),
+    item_key: 'K1',
+    item_name: 'Triển khai',
+    vat_rate: '10%',
+    billing_type: 'Nhiều đợt',
+    item_value: 100_000_000,
+    milestone_input: 'Phần trăm',
+    milestones: [
+      { milestone_name: 'Tạm ứng', amount: null, percent: 30, due_date: '2027-01-15', requires_acceptance: true },
+      { milestone_name: 'Nghiệm thu', amount: null, percent: 70, due_date: '2027-06-30', requires_acceptance: true },
+    ],
+    ...over,
+  }
+}
+function recurringItem(over: Partial<ItemForm> = {}): ItemForm {
+  return {
+    ...emptyItem(),
+    item_name: 'License',
+    vat_rate: 'Không chịu thuế',
+    billing_type: 'Định kỳ',
+    requires_acceptance: false,
+    unit_price: 15_000_000,
+    period: 'Quý',
+    period_start: '2027-01-01',
+    period_end: '2027-12-31',
+    ...over,
+  }
+}
+function form(over: Partial<ContractForm> = {}): ContractForm {
+  return {
+    ...emptyForm(),
+    contract_no: 'HD-001',
+    customer: 'KH-001',
+    start_date: '2027-01-01',
+    end_date: '2027-12-31',
+    items: [onceItem()],
+    ...over,
+  }
+}
+
+describe('FORM_RULES', () => {
+  it('báo thiếu số hợp đồng, khách hàng, ngày bắt đầu', () => {
+    for (const [key, text] of [
+      ['contract_no', 'Vui lòng nhập số hợp đồng.'],
+      ['customer', 'Vui lòng nhập khách hàng.'],
+      ['start_date', 'Vui lòng nhập ngày bắt đầu hiệu lực.'],
+    ] as const) {
+      const f = form({ [key]: '' } as Partial<ContractForm>)
+      expect(checkField(FORM_RULES[key]!, f[key], f)).toBe(text)
+    }
+  })
+
+  it('hợp lệ thì không báo lỗi', () => {
+    const f = form()
+    for (const key of Object.keys(FORM_RULES) as (keyof ContractForm & string)[]) {
+      expect(checkField(FORM_RULES[key]!, f[key], f)).toBeNull()
+    }
+  })
+
+  it('ngày kết thúc trước ngày bắt đầu thì báo lỗi', () => {
+    const f = form({ end_date: '2026-12-31' })
+    expect(checkField(FORM_RULES.end_date!, f.end_date, f)).toBe(MSG_END_BEFORE_START)
+  })
+
+  it('ngày kết thúc bắt buộc khi có hạng mục Định kỳ', () => {
+    expect(validateExtra(form({ end_date: '', items: [recurringItem()] })).end_date).toBe(MSG_END_REQUIRED)
+    expect(validateExtra(form({ end_date: '', items: [onceItem()] })).end_date).toBeUndefined()
+  })
+
+  it('giới hạn độ dài', () => {
+    const f = form({ contract_no: 'A'.repeat(141) })
+    expect(checkField(FORM_RULES.contract_no!, f.contract_no, f)).toBe('Số hợp đồng tối đa 140 ký tự.')
+  })
+})
+
+describe('validateItems', () => {
+  it('hạng mục hợp lệ cả ba kiểu thì không lỗi', () => {
+    expect(validateItems(form({ items: [onceItem(), multiItem(), recurringItem()] }))).toEqual({})
+  })
+
+  it('Một lần: thiếu tên, thuế suất, số tiền, ngày đến hạn', () => {
+    const errors = validateItems(form({ items: [onceItem({ item_name: '', vat_rate: '', amount: null, due_date: '' })] }))
+    expect(errors['items.0.item_name']).toBe('Hạng mục dòng 1: vui lòng nhập tên hạng mục.')
+    expect(errors['items.0.vat_rate']).toBe('Hạng mục dòng 1: vui lòng nhập thuế suất.')
+    expect(errors['items.0.amount']).toBe('Hạng mục dòng 1: vui lòng nhập số tiền trước thuế.')
+    expect(errors['items.0.due_date']).toBe('Hạng mục dòng 1: vui lòng nhập ngày đến hạn.')
+  })
+
+  it('số tiền bằng 0 hoặc âm thì báo phải lớn hơn 0', () => {
+    for (const amount of [0, -5]) {
+      const errors = validateItems(form({ items: [onceItem({ amount })] }))
+      expect(errors['items.0.amount']).toBe('Hạng mục dòng 1: số tiền trước thuế phải lớn hơn 0.')
+    }
+  })
+
+  it('Nhiều đợt không có mốc', () => {
+    const errors = validateItems(form({ items: [onceItem(), multiItem({ milestones: [] })] }))
+    expect(errors['items.1.milestones']).toBe('Hạng mục dòng 2: cần ít nhất 1 mốc thanh toán.')
+  })
+
+  it('Nhiều đợt thiếu giá trị hạng mục', () => {
+    const errors = validateItems(form({ items: [multiItem({ item_value: null })] }))
+    expect(errors['items.0.item_value']).toBe('Hạng mục dòng 1: vui lòng nhập giá trị hạng mục trước thuế.')
+  })
+
+  it('mốc thiếu tên, ngày, phần trăm', () => {
+    const item = multiItem()
+    item.milestones[0] = { ...item.milestones[0], milestone_name: '', due_date: '', percent: null }
+    const errors = validateItems(form({ items: [item] }))
+    expect(errors['items.0.milestones.0.milestone_name']).toBe('Hạng mục dòng 1, mốc 1: vui lòng nhập tên mốc.')
+    expect(errors['items.0.milestones.0.due_date']).toBe('Hạng mục dòng 1, mốc 1: vui lòng nhập ngày đến hạn.')
+    expect(errors['items.0.milestones.0.percent']).toBe('Hạng mục dòng 1, mốc 1: vui lòng nhập phần trăm.')
+  })
+
+  it('tổng tiền các mốc lệch giá trị hạng mục thì báo độ lệch', () => {
+    const item = multiItem({
+      milestone_input: 'Số tiền',
+      milestones: [
+        { milestone_name: 'Đợt 1', amount: 30_000_000, percent: null, due_date: '2027-01-15', requires_acceptance: true },
+        { milestone_name: 'Đợt 2', amount: 60_000_000, percent: null, due_date: '2027-02-15', requires_acceptance: true },
+      ],
+    })
+    expect(validateItems(form({ items: [item] }))['items.0.milestones']).toBe(
+      'Hạng mục "Triển khai": tổng các mốc là 90.000.000, giá trị hạng mục là 100.000.000, đang lệch -10.000.000.',
+    )
+  })
+
+  it('tổng phần trăm lệch 100 thì báo độ lệch', () => {
+    const item = multiItem()
+    item.milestones[1].percent = 60
+    expect(validateItems(form({ items: [item] }))['items.0.milestones']).toBe(
+      'Hạng mục "Triển khai": tổng phần trăm các mốc là 90%, đang lệch -10%.',
+    )
+  })
+
+  it('Định kỳ: thiếu đơn giá, chu kỳ, ngày bắt đầu kỳ đầu', () => {
+    const errors = validateItems(form({ items: [recurringItem({ unit_price: null, period: '', period_start: '' })] }))
+    expect(errors['items.0.unit_price']).toBe('Hạng mục dòng 1: vui lòng nhập đơn giá mỗi kỳ trước thuế.')
+    expect(errors['items.0.period']).toBe('Hạng mục dòng 1: vui lòng nhập chu kỳ.')
+    expect(errors['items.0.period_start']).toBe('Hạng mục dòng 1: vui lòng nhập ngày bắt đầu kỳ đầu.')
+  })
+
+  it('Định kỳ: ngày kết thúc kỳ trước ngày bắt đầu kỳ đầu', () => {
+    const errors = validateItems(form({ items: [recurringItem({ period_end: '2026-12-01' })] }))
+    expect(errors['items.0.period_end']).toBe(
+      'Hạng mục dòng 1: ngày kết thúc kỳ phải từ ngày bắt đầu kỳ đầu trở đi.',
+    )
+  })
+
+  it('Định kỳ: ngày kết thúc kỳ trống thì lấy theo hợp đồng khi so sánh', () => {
+    expect(validateItems(form({ end_date: '2027-06-30', items: [recurringItem({ period_end: '' })] }))).toEqual({})
+    const bad = validateItems(form({ end_date: '2026-06-30', items: [recurringItem({ period_end: '' })] }))
+    expect(bad['items.0.period_end']).toBeDefined()
+  })
+
+  it('Định kỳ: số ngày được nợ âm hoặc lẻ', () => {
+    for (const credit_days of [-1, 1.5]) {
+      const errors = validateItems(form({ items: [recurringItem({ credit_days })] }))
+      expect(errors['items.0.credit_days']).toBe(
+        'Hạng mục dòng 1: số ngày được nợ phải là số nguyên từ 0 trở lên.',
+      )
+    }
+    expect(validateItems(form({ items: [recurringItem({ credit_days: 0 })] }))).toEqual({})
+  })
+
+  it('trường của kiểu thu khác không bị kiểm', () => {
+    const item = onceItem({ unit_price: null, period: '', item_value: null })
+    expect(validateItems(form({ items: [item] }))).toEqual({})
+  })
+})
+
+describe('milestoneSummary', () => {
+  it('theo phần trăm: 30% + 70%', () => {
+    const item = multiItem()
+    expect(milestoneSummary(item, item.milestones)).toEqual({ total: 100, target: 100, diff: 0 })
+  })
+  it('theo số tiền: lệch so với giá trị hạng mục', () => {
+    const item = multiItem({ milestone_input: 'Số tiền' })
+    const ms = [{ ...emptyMilestone(item), amount: 30_000_000 }, { ...emptyMilestone(item), amount: 60_000_000 }]
+    expect(milestoneSummary(item, ms)).toEqual({ total: 90_000_000, target: 100_000_000, diff: -10_000_000 })
+  })
+  it('không có mốc', () => {
+    expect(milestoneSummary(multiItem(), [])).toEqual({ total: 0, target: 100, diff: -100 })
+  })
+})
+
+describe('hành vi khi nhập', () => {
+  it('đổi kiểu thu đặt lại Cần nghiệm thu và sửa tay vẫn giữ', () => {
+    const item = onceItem()
+    const f = form({ items: [item] })
+    item.billing_type = 'Định kỳ'
+    onBillingTypeChange(item, f)
+    expect(item.requires_acceptance).toBe(false)
+    item.requires_acceptance = true // sửa tay
+    expect(item.requires_acceptance).toBe(true)
+    item.billing_type = 'Nhiều đợt'
+    onBillingTypeChange(item, f)
+    expect(item.requires_acceptance).toBe(true)
+    item.requires_acceptance = false
+    item.billing_type = 'Một lần'
+    onBillingTypeChange(item, f)
+    expect(item.requires_acceptance).toBe(true)
+  })
+
+  it('sang Định kỳ thì ngày kết thúc kỳ lấy theo hợp đồng, không ghi đè giá trị đã có', () => {
+    const f = form({ end_date: '2027-12-31' })
+    const a = onceItem({ billing_type: 'Định kỳ' })
+    onBillingTypeChange(a, f)
+    expect(a.period_end).toBe('2027-12-31')
+    const b = onceItem({ billing_type: 'Định kỳ', period_end: '2027-06-30' })
+    onBillingTypeChange(b, f)
+    expect(b.period_end).toBe('2027-06-30')
+  })
+
+  it('rời Nhiều đợt thì bỏ các mốc', () => {
+    const item = multiItem({ billing_type: 'Một lần' })
+    onBillingTypeChange(item, form())
+    expect(item.milestones).toEqual([])
+  })
+
+  it('applyContractEndDate điền ngày kết thúc kỳ còn trống của hạng mục Định kỳ', () => {
+    const f = form({ end_date: '2027-12-31', items: [recurringItem({ period_end: '' }), recurringItem({ period_end: '2027-06-30' }), onceItem()] })
+    applyContractEndDate(f)
+    expect(f.items[0].period_end).toBe('2027-12-31')
+    expect(f.items[1].period_end).toBe('2027-06-30')
+    expect(f.items[2].period_end).toBe('')
+  })
+
+  it('emptyForm luôn có sẵn 1 hạng mục; mốc mới lấy Cần nghiệm thu theo hạng mục', () => {
+    expect(emptyForm().items).toHaveLength(1)
+    expect(emptyMilestone({ requires_acceptance: false }).requires_acceptance).toBe(false)
+    expect(emptyMilestone({ requires_acceptance: true }).requires_acceptance).toBe(true)
+  })
+})
+
+describe('toPayload / fromDoc', () => {
+  it('chuỗi rỗng gửi null, không gửi trạng thái và số tổng', () => {
+    const p = toPayload(form({ contract_title: '  ', responsible_user: '', signed_date: '' }))
+    expect(p.contract_title).toBeNull()
+    expect(p.responsible_user).toBeNull()
+    expect(p.signed_date).toBeNull()
+    expect(p).not.toHaveProperty('status')
+    expect(p).not.toHaveProperty('total_after_tax')
+  })
+
+  it('chỉ gửi trường của đúng kiểu thu', () => {
+    const p = toPayload(form({ items: [onceItem({ unit_price: 1, period: 'Quý' }), recurringItem({ amount: 9 }), multiItem()] }))
+    expect(p.items[0]).toHaveProperty('amount')
+    expect(p.items[0]).not.toHaveProperty('unit_price')
+    expect(p.items[1]).toHaveProperty('unit_price')
+    expect(p.items[1]).not.toHaveProperty('amount')
+    expect(p.items[2]).toHaveProperty('item_value')
+    expect(p.items[2]).not.toHaveProperty('period')
+  })
+
+  it('mốc là mảng phẳng có item_key, theo cách nhập; mốc của kiểu khác bị bỏ', () => {
+    const p = toPayload(form({ items: [multiItem(), onceItem({ milestones: multiItem().milestones })] }))
+    expect(p.milestones).toHaveLength(2)
+    expect(p.milestones[0]).toMatchObject({ item_key: 'K1', milestone_name: 'Tạm ứng', percent: 30, requires_acceptance: 1 })
+    expect(p.milestones[0]).not.toHaveProperty('amount')
+  })
+
+  const doc: Contract = {
+    name: 'HD-001',
+    contract_no: 'HD-001',
+    customer: 'KH-001',
+    status: 'Nháp',
+    start_date: '2027-01-01',
+    end_date: '2027-12-31',
+    total_after_tax: 175_400_000,
+    items: [
+      { name: 'a', item_key: 'K1', item_name: 'Triển khai', vat_rate: '10%', billing_type: 'Nhiều đợt', requires_acceptance: 1, item_value: 100_000_000, milestone_input: 'Phần trăm', amount: 0, unit_price: 0, credit_days: 0 },
+      { name: 'b', item_key: 'K2', item_name: 'License', vat_rate: 'Không chịu thuế', billing_type: 'Định kỳ', requires_acceptance: 0, unit_price: 15_000_000, period: 'Quý', period_start: '2027-01-01', period_end: '2027-12-31', bill_timing: 'Đầu kỳ', credit_days: 0 },
+    ],
+    milestones: [
+      { name: 'm1', item_key: 'K1', milestone_name: 'Tạm ứng', percent: 30, due_date: '2027-01-15', requires_acceptance: 1 },
+      { name: 'm2', item_key: 'K1', milestone_name: 'Nghiệm thu', percent: 70, due_date: '2027-06-30', requires_acceptance: 1 },
+      { name: 'm3', item_key: 'KHAC', milestone_name: 'Mồ côi', percent: 5, due_date: '2027-06-30', requires_acceptance: 1 },
+    ],
+  }
+
+  it('fromDoc gom mốc về đúng hạng mục và bỏ mốc mồ côi', () => {
+    const f = fromDoc(doc)
+    expect(f.items).toHaveLength(2)
+    expect(f.items[0].milestones.map((m) => m.milestone_name)).toEqual(['Tạm ứng', 'Nghiệm thu'])
+    expect(f.items[1].milestones).toEqual([])
+    expect(f.items[1].requires_acceptance).toBe(false)
+  })
+
+  it('đi rồi về giữ nguyên', () => {
+    const once = fromDoc(doc)
+    const back = fromDoc({ ...doc, ...(JSON.parse(JSON.stringify(toPayload(once))) as object) } as Contract)
+    expect(back).toEqual(once)
+  })
+
+  it('doc chưa có hạng mục thì form có sẵn 1 dòng', () => {
+    expect(fromDoc({ name: 'X', contract_no: 'X', customer: 'K', start_date: '2027-01-01' } as Contract).items).toHaveLength(1)
+  })
+})
+
+describe('danh sách', () => {
+  it('toFrappeFilters theo từng ô', () => {
+    expect(toFrappeFilters(emptyFilters())).toEqual({})
+    const f = { ...emptyFilters(), contractNo: ' 001 ', customer: 'KH-1', responsibleUser: 'a@x.com', contractType: 'DV' }
+    expect(toFrappeFilters(f)).toEqual({
+      contract_no: ['like', '%001%'],
+      customer: 'KH-1',
+      responsible_user: 'a@x.com',
+      contract_type: 'DV',
+    })
+  })
+
+  it('nhóm trạng thái: chọn một phần, không chọn nhóm nào', () => {
+    expect(toFrappeFilters({ ...emptyFilters(), groups: ['Nháp', 'Đã hủy'] })).toEqual({ status: ['in', ['Nháp', 'Đã hủy']] })
+    expect(toFrappeFilters({ ...emptyFilters(), groups: [] })).toEqual({ name: ['in', []] })
+  })
+
+  it('filtersActive', () => {
+    expect(filtersActive(emptyFilters())).toBe(false)
+    expect(filtersActive({ ...emptyFilters(), customer: 'KH-1' })).toBe(true)
+    expect(filtersActive({ ...emptyFilters(), groups: ['Nháp'] })).toBe(true)
+  })
+
+  it('groupTree đếm theo trạng thái', () => {
+    const tree = groupTree([{ status: 'Nháp' }, { status: 'Nháp' }, { status: 'Đang hiệu lực' }, { status: 'Đã hủy' }])
+    expect(tree).toHaveLength(1)
+    expect(tree[0].label).toBe('Tất cả hợp đồng')
+    expect(tree[0].count).toBe(4)
+    expect(tree[0].children?.map((c) => [c.key, c.count])).toEqual([
+      ['Nháp', 2],
+      ['Đang hiệu lực', 1],
+      ['Hết hạn', 0],
+      ['Đã thanh lý', 0],
+      ['Đã hủy', 1],
+    ])
+  })
+
+  it('cột: STT và số hợp đồng ghim trái, thao tác ghim phải, hai cột tiền có dòng Tổng, không có cột đã thu', () => {
+    const byKey = Object.fromEntries(COLUMNS.map((c) => [c.key, c]))
+    expect(byKey._index.pin).toBe('left')
+    expect(byKey.contract_no.pin).toBe('left')
+    expect(byKey._actions.pin).toBe('right')
+    expect(byKey.total_before_tax.sum).toBe(true)
+    expect(byKey.total_after_tax.sum).toBe(true)
+    expect(byKey).not.toHaveProperty('paid_amount')
+    expect(byKey).not.toHaveProperty('outstanding_amount')
+  })
+})
+
+describe('trạng thái', () => {
+  it('có StatusDef cho cả 5 trạng thái', () => {
+    for (const s of STATUSES) expect(statusOf({ status: s })?.label).toBe(s)
+  })
+
+  it('canActivate, canCancel, canLiquidate, isLocked', () => {
+    const table: Record<string, [boolean, boolean, boolean, boolean]> = {
+      'Nháp': [true, true, false, false],
+      'Đang hiệu lực': [false, true, true, false],
+      'Hết hạn': [false, false, false, true],
+      'Đã thanh lý': [false, false, false, true],
+      'Đã hủy': [false, false, false, true],
+    }
+    for (const [status, expected] of Object.entries(table)) {
+      expect([canActivate(status), canCancel(status), canLiquidate(status), isLocked(status)], status).toEqual(expected)
+    }
+  })
+
+  it('lockedMessage', () => {
+    expect(lockedMessage('Đã hủy')).toBe('Hợp đồng đã hủy, không sửa được.')
+    expect(lockedMessage('Đã thanh lý')).toBe('Hợp đồng đã thanh lý, không sửa được.')
+    expect(lockedMessage('Hết hạn')).toBe('Hợp đồng đã hết hạn, không sửa được.')
+  })
+})

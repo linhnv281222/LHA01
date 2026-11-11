@@ -61,7 +61,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-30 08:00:00.000000",
+ "modified": "2026-11-11 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Contract Tracker",
  "name": "Contract Type",
@@ -79,6 +79,16 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Quản lý hợp đồng"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Xem hợp đồng"
   }
  ],
  "row_format": "Dynamic",

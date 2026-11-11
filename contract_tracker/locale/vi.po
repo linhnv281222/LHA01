@@ -21,5 +21,14 @@ msgstr "Thuế suất"
 msgid "Contract Customer"
 msgstr "Khách hàng"
 
+msgid "Contract"
+msgstr "Hợp đồng"
+
+msgid "Contract Item"
+msgstr "Hạng mục hợp đồng"
+
+msgid "Contract Milestone"
+msgstr "Mốc thanh toán"
+
 msgid "Your account has been locked and will resume after {0} seconds"
 msgstr "Tài khoản tạm bị khóa, vui lòng thử lại sau {0} giây"

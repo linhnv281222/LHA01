@@ -1,0 +1,284 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:contract_no",
+ "creation": "2026-11-11 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_section",
+  "contract_no",
+  "customer",
+  "customer_name",
+  "contract_type",
+  "contract_type_name",
+  "column_break_1",
+  "contract_title",
+  "responsible_user",
+  "responsible_name",
+  "status",
+  "term_section",
+  "signed_date",
+  "start_date",
+  "end_date",
+  "items_section",
+  "items",
+  "milestones_section",
+  "milestones",
+  "totals_section",
+  "total_before_tax",
+  "total_tax",
+  "total_after_tax",
+  "column_break_2",
+  "invoiced_amount",
+  "paid_amount",
+  "outstanding_amount",
+  "docs_section",
+  "contract_file",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_section",
+   "fieldtype": "Section Break",
+   "label": "Thông tin chung"
+  },
+  {
+   "fieldname": "contract_no",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Số hợp đồng",
+   "length": 140,
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Khách hàng",
+   "options": "Contract Customer",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Tên khách hàng",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contract_type",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Loại hợp đồng",
+   "options": "Contract Type"
+  },
+  {
+   "fetch_from": "contract_type.type_name",
+   "fieldname": "contract_type_name",
+   "fieldtype": "Data",
+   "label": "Tên loại hợp đồng",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contract_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tên/nội dung hợp đồng",
+   "length": 140
+  },
+  {
+   "fieldname": "responsible_user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Người phụ trách",
+   "options": "User"
+  },
+  {
+   "fetch_from": "responsible_user.full_name",
+   "fieldname": "responsible_name",
+   "fieldtype": "Data",
+   "label": "Tên người phụ trách",
+   "read_only": 1
+  },
+  {
+   "default": "Nháp",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Trạng thái",
+   "no_copy": 1,
+   "options": "Nháp\nĐang hiệu lực\nHết hạn\nĐã thanh lý\nĐã hủy",
+   "read_only": 1
+  },
+  {
+   "fieldname": "term_section",
+   "fieldtype": "Section Break",
+   "label": "Thời hạn"
+  },
+  {
+   "fieldname": "signed_date",
+   "fieldtype": "Date",
+   "label": "Ngày ký"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Ngày bắt đầu hiệu lực",
+   "reqd": 1
+  },
+  {
+   "description": "Bắt buộc khi có hạng mục Định kỳ.",
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "Ngày kết thúc"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Hạng mục"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Hạng mục",
+   "options": "Contract Item"
+  },
+  {
+   "description": "Mỗi mốc gắn với hạng mục Nhiều đợt qua mã hạng mục.",
+   "fieldname": "milestones_section",
+   "fieldtype": "Section Break",
+   "label": "Mốc thanh toán"
+  },
+  {
+   "fieldname": "milestones",
+   "fieldtype": "Table",
+   "label": "Mốc thanh toán",
+   "options": "Contract Milestone"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Giá trị hợp đồng"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_before_tax",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Giá trị trước thuế (VND)",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_tax",
+   "fieldtype": "Currency",
+   "label": "Tiền thuế (VND)",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_after_tax",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Tổng sau thuế (VND)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "invoiced_amount",
+   "fieldtype": "Currency",
+   "label": "Đã xuất hóa đơn (VND)",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "label": "Đã thu (VND)",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "outstanding_amount",
+   "fieldtype": "Currency",
+   "label": "Còn phải thu (VND)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "docs_section",
+   "fieldtype": "Section Break",
+   "label": "Tài liệu và ghi chú"
+  },
+  {
+   "fieldname": "contract_file",
+   "fieldtype": "Attach",
+   "label": "File hợp đồng"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Ghi chú"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-11 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Contract Tracker",
+ "name": "Contract",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Quản lý hợp đồng",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Xem hợp đồng"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "customer_name,contract_title",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
