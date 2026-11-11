@@ -69,6 +69,22 @@ export const router = createRouter({
       component: () => import('./pages/contracts/ContractForm.vue'),
       props: true,
     },
+    { path: '/invoices', name: 'InvoiceList', component: () => import('./pages/invoices/InvoiceList.vue') },
+    { path: '/invoices/new', name: 'InvoiceNew', component: () => import('./pages/invoices/InvoiceForm.vue') },
+    {
+      path: '/invoices/:name/edit',
+      name: 'InvoiceEdit',
+      component: () => import('./pages/invoices/InvoiceForm.vue'),
+      props: true,
+    },
+    { path: '/receipts', name: 'ReceiptList', component: () => import('./pages/receipts/ReceiptList.vue') },
+    { path: '/receipts/new', name: 'ReceiptNew', component: () => import('./pages/receipts/ReceiptForm.vue') },
+    {
+      path: '/receipts/:name/edit',
+      name: 'ReceiptEdit',
+      component: () => import('./pages/receipts/ReceiptForm.vue'),
+      props: true,
+    },
     { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('./pages/NotFound.vue') },
   ],
 })

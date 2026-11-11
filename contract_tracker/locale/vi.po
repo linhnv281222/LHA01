@@ -33,5 +33,20 @@ msgstr "Mốc thanh toán"
 msgid "Payment Schedule"
 msgstr "Đợt thu"
 
+msgid "Sales Invoice Record"
+msgstr "Hóa đơn"
+
+msgid "Sales Invoice Record Item"
+msgstr "Đợt trong hóa đơn"
+
+msgid "Sales Invoice Tax Row"
+msgstr "Hóa đơn theo thuế suất"
+
+msgid "Payment Receipt"
+msgstr "Phiếu thu"
+
+msgid "Payment Receipt Allocation"
+msgstr "Phân bổ phiếu thu"
+
 msgid "Your account has been locked and will resume after {0} seconds"
 msgstr "Tài khoản tạm bị khóa, vui lòng thử lại sau {0} giây"

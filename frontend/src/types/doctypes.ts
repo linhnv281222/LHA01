@@ -181,6 +181,62 @@ export interface ContractType {
   description?: string | null
 }
 
+/** DocType "Payment Receipt" (contract_tracker/contract_tracker/doctype/payment_receipt/payment_receipt.json) */
+export interface PaymentReceipt {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  /** Khách hàng */
+  customer: string
+  /** Tên khách hàng */
+  customer_name?: string | null
+  /** Ngày thu */
+  receipt_date: string
+  /** Số tiền (VND) */
+  amount: number
+  /** Hình thức */
+  method: "Chuy\u1ec3n kho\u1ea3n" | "Ti\u1ec1n m\u1eb7t"
+  /** Ghi chú */
+  notes?: string | null
+  /** Phân bổ */
+  allocations?: PaymentReceiptAllocation[] | null
+  /** Đã phân bổ (VND) */
+  allocated_total?: number | null
+  /** Chưa phân bổ (VND) */
+  unallocated_amount?: number | null
+}
+
+/** DocType "Payment Receipt Allocation" (contract_tracker/contract_tracker/doctype/payment_receipt_allocation/payment_receipt_allocation.json) */
+export interface PaymentReceiptAllocation {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  parent?: string
+  parentfield?: string
+  parenttype?: string
+  idx?: number
+  /** Đợt thu */
+  schedule: string
+  /** Số phân bổ (VND) */
+  allocated_amount: number
+  /** Tên đợt */
+  schedule_name?: string | null
+  /** Hợp đồng */
+  contract?: string | null
+  /** Ngày đến hạn */
+  due_date?: string | null
+  /** Tổng tiền đợt (VND) */
+  total_amount?: number | null
+  /** Còn nợ (VND) */
+  outstanding_amount?: number | null
+}
+
 /** DocType "Payment Schedule" (contract_tracker/contract_tracker/doctype/payment_schedule/payment_schedule.json) */
 export interface PaymentSchedule {
   name: string
@@ -231,6 +287,92 @@ export interface PaymentSchedule {
   paid_amount?: number | null
   /** Quá hạn */
   is_overdue?: 0 | 1
+}
+
+/** DocType "Sales Invoice Record" (contract_tracker/contract_tracker/doctype/sales_invoice_record/sales_invoice_record.json) */
+export interface SalesInvoiceRecord {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  /** Khách hàng */
+  customer: string
+  /** Tên khách hàng */
+  customer_name?: string | null
+  /** Số hóa đơn */
+  invoice_no: string
+  /** Ký hiệu */
+  invoice_series?: string | null
+  /** Ngày xuất */
+  invoice_date: string
+  /** Trạng thái */
+  status?: "Hi\u1ec7u l\u1ef1c" | "\u0110\u00e3 h\u1ee7y" | null
+  /** Ghi chú */
+  notes?: string | null
+  /** Các đợt thu */
+  items: SalesInvoiceRecordItem[]
+  /** Tổng trước thuế (VND) */
+  total_before_tax?: number | null
+  /** Tổng thuế (VND) */
+  total_tax?: number | null
+  /** Tổng cộng (VND) */
+  grand_total?: number | null
+  /** Theo thuế suất */
+  tax_breakdown?: SalesInvoiceTaxRow[] | null
+}
+
+/** DocType "Sales Invoice Record Item" (contract_tracker/contract_tracker/doctype/sales_invoice_record_item/sales_invoice_record_item.json) */
+export interface SalesInvoiceRecordItem {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  parent?: string
+  parentfield?: string
+  parenttype?: string
+  idx?: number
+  /** Đợt thu */
+  schedule: string
+  /** Hợp đồng */
+  contract?: string | null
+  /** Tên đợt */
+  schedule_name?: string | null
+  /** Ngày đến hạn */
+  due_date?: string | null
+  /** Trước thuế (VND) */
+  amount_before_tax?: number | null
+  /** Thuế suất */
+  vat_rate?: string | null
+  /** Tiền thuế (VND) */
+  tax_amount?: number | null
+  /** Tổng tiền (VND) */
+  total_amount?: number | null
+}
+
+/** DocType "Sales Invoice Tax Row" (contract_tracker/contract_tracker/doctype/sales_invoice_tax_row/sales_invoice_tax_row.json) */
+export interface SalesInvoiceTaxRow {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  parent?: string
+  parentfield?: string
+  parenttype?: string
+  idx?: number
+  /** Thuế suất */
+  vat_rate?: string | null
+  /** Trước thuế (VND) */
+  amount_before_tax?: number | null
+  /** Tiền thuế (VND) */
+  tax_amount?: number | null
+  /** Tổng tiền (VND) */
+  total_amount?: number | null
 }
 
 /** DocType "VAT Rate" (contract_tracker/contract_tracker/doctype/vat_rate/vat_rate.json) */

@@ -10,6 +10,7 @@ import {
   SCHEDULE_FIELDS,
   acceptanceStatusOf,
   invoiceStatusOf,
+  overdueStatusOf,
   paymentStatusOf,
   requestStatusOf,
   scheduleTotals,
@@ -54,6 +55,7 @@ defineExpose({ reload })
             <template #cell-request_status="{ row }"><StatusBadge :status="requestStatusOf(row as ScheduleRow)" /></template>
             <template #cell-invoice_status="{ row }"><StatusBadge :status="invoiceStatusOf(row as ScheduleRow)" /></template>
             <template #cell-payment_status="{ row }"><StatusBadge :status="paymentStatusOf(row as ScheduleRow)" /></template>
+            <template #cell-is_overdue="{ row }"><StatusBadge :status="overdueStatusOf(row as ScheduleRow)" /></template>
           </MiniTable>
         </div>
         <FormSection title="Tổng" muted :columns="3">

@@ -15,6 +15,11 @@ from contract_tracker.contract_tracker.doctype.contract.test_contract import (
 	make_contract,
 	milestones_30_70,
 )
+from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import (
+	compute_schedule_state,
+	has_documents,
+	refresh_schedules,
+)
 from contract_tracker.tests.test_setup import VIEWER, make_user
 
 EXTRA_TEST_RECORD_DEPENDENCIES = []
@@ -206,6 +211,39 @@ class TestPaymentSchedule(IntegrationTestCase):
 			frappe.get_doc(DT, name).save()
 		with self.assertRaises(frappe.PermissionError):
 			frappe.delete_doc(DT, name)
+
+	def test_has_documents(self):
+		self.assertFalse(has_documents(frappe._dict(invoice_status="Chưa xuất", paid_amount=0)))
+		self.assertTrue(has_documents(frappe._dict(invoice_status="Đã xuất", paid_amount=0)))
+		self.assertTrue(has_documents(frappe._dict(invoice_status="Chưa xuất", paid_amount=1)))
+		doc = active(example_contract())
+		name = schedules(doc.name)[0].name
+		self.assertFalse(has_documents(frappe._dict(name=name)))
+		frappe.db.set_value(DT, name, "paid_amount", 5)
+		self.assertTrue(has_documents(frappe._dict(name=name)))
+
+	def test_compute_schedule_state(self):
+		past, future = "2020-01-01", "2999-01-01"
+		self.assertEqual(compute_schedule_state(100, 0, future, None)["payment_status"], "Chưa thu")
+		self.assertEqual(compute_schedule_state(100, 40, future, "S1")["payment_status"], "Thu một phần")
+		self.assertEqual(compute_schedule_state(100, 100, future, "S1")["payment_status"], "Đã thu")
+		self.assertEqual(compute_schedule_state(100, 40, future, "S1")["invoice_status"], "Đã xuất")
+		self.assertEqual(compute_schedule_state(100, 40, future, None)["invoice_status"], "Chưa xuất")
+		self.assertEqual(compute_schedule_state(100, 99, past, None)["is_overdue"], 1)
+		self.assertEqual(compute_schedule_state(100, 100, past, None)["is_overdue"], 0)
+		self.assertEqual(compute_schedule_state(100, 0, future, None)["is_overdue"], 0)
+
+	def test_regenerate_keeps_documented_schedule(self):
+		doc = active(example_contract())
+		first = next(r for r in schedules(doc.name) if r.schedule_name == "Quý 1/2027")
+		frappe.db.set_value(DT, first.name, {"invoice_status": "Đã xuất", "invoice_no": "X1"})
+		doc = frappe.get_doc("Contract", doc.name)
+		doc.items = [i for i in doc.items if i.item_name != "License"]
+		doc.save()
+		self.assertEqual([r.name for r in schedules(doc.name) if r.item_name == "License"], [first.name])
+
+	def test_refresh_schedules_ignores_missing(self):
+		refresh_schedules(["", None, "DT-KHONG-CO"])
 
 	def test_activate_error_rolls_back(self):
 		doc = example_contract().insert()

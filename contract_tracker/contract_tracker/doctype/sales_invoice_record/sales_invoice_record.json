@@ -1,0 +1,177 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "HDN-.YYYY.-.#####",
+ "creation": "2026-11-11 13:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_section",
+  "customer",
+  "customer_name",
+  "invoice_no",
+  "invoice_series",
+  "column_break_1",
+  "invoice_date",
+  "status",
+  "notes",
+  "items_section",
+  "items",
+  "totals_section",
+  "total_before_tax",
+  "total_tax",
+  "grand_total",
+  "tax_breakdown"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_section",
+   "fieldtype": "Section Break",
+   "label": "Thông tin chung"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Khách hàng",
+   "options": "Contract Customer",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Tên khách hàng",
+   "read_only": 1
+  },
+  {
+   "fieldname": "invoice_no",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Số hóa đơn",
+   "reqd": 1
+  },
+  {
+   "fieldname": "invoice_series",
+   "fieldtype": "Data",
+   "label": "Ký hiệu"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "invoice_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Ngày xuất",
+   "reqd": 1
+  },
+  {
+   "default": "Hiệu lực",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Trạng thái",
+   "no_copy": 1,
+   "options": "Hiệu lực\nĐã hủy",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Ghi chú"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Các đợt thu"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Các đợt thu",
+   "options": "Sales Invoice Record Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Tổng tiền"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_before_tax",
+   "fieldtype": "Currency",
+   "label": "Tổng trước thuế (VND)",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_tax",
+   "fieldtype": "Currency",
+   "label": "Tổng thuế (VND)",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "grand_total",
+   "fieldtype": "Currency",
+   "label": "Tổng cộng (VND)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tax_breakdown",
+   "fieldtype": "Table",
+   "label": "Theo thuế suất",
+   "options": "Sales Invoice Tax Row",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-11 13:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Contract Tracker",
+ "name": "Sales Invoice Record",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Quản lý hợp đồng",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Xem hợp đồng"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "invoice_no,customer_name",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "invoice_no",
+ "track_changes": 1
+}
