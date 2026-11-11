@@ -2,7 +2,7 @@
 // Form thêm mới / cập nhật Phiếu thu, theo mẫu ContractForm.vue. Chuẩn chưa có bảng nhập nhiều dòng
 // nên mỗi dòng phân bổ là một hàng FnField (như ContractItemRows.vue).
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Alert, Button, LoadingText, toast, useCall, useDoc, useDoctype, useList } from 'frappe-ui'
 import {
   FnField,
@@ -17,6 +17,7 @@ import {
   type SelectOption,
 } from '@/standard'
 import type { ContractCustomer, SalesInvoiceRecord } from '@/types/doctypes'
+import { parseScheduleQuery } from '@/pages/payment-schedules/paymentSchedule'
 import {
   DOCTYPE,
   FORM_RULES,
@@ -26,6 +27,7 @@ import {
   emptyForm,
   ensureBlankRow,
   fromDoc,
+  prefillAllocations,
   toPayload,
   validateAllocations,
   type PaymentReceipt,
@@ -98,9 +100,44 @@ async function loadReceivable() {
   const res = await receivableCall.submit({ customer: form.customer, ...(props.name ? { receipt: props.name } : {}) })
   receivable.value = unwrap<ReceivableSchedule>(res)
 }
+// Điền sẵn từ Lịch thu tiền: /receipts/new?schedules=DT-1,DT-2 (chỉ khi thêm mới).
+// Cờ `prefilling` để watcher đổi khách hàng không xóa dòng và không tải đợt lần hai.
+const route = useRoute()
+let prefilling = false
+const scheduleNames = isEdit.value ? [] : parseScheduleQuery(route.query.schedules)
+const prefillList = useList<{ name: string; customer: string }>({
+  doctype: 'Payment Schedule',
+  fields: ['name', 'customer'],
+  filters: { name: ['in', scheduleNames] },
+  limit: 5000,
+  immediate: false,
+})
+async function prefillFromQuery() {
+  if (!scheduleNames.length) return
+  prefilling = true
+  try {
+    await prefillList.reload()
+    const customers = Object.fromEntries((prefillList.data ?? []).map((s) => [s.name, s.customer]))
+    const first = scheduleNames.map((n) => customers[n]).find(Boolean) ?? ''
+    form.customer = first
+    await nextTick()
+    await loadReceivable()
+    const { allocations, amount, skipped } = prefillAllocations(scheduleNames, customers, receivable.value, first)
+    form.allocations.splice(0, form.allocations.length, ...allocations)
+    form.amount = amount
+    if (skipped.length) {
+      toast.warning(`Đã bỏ qua ${skipped.length} đợt không hợp lệ (đã xuất hóa đơn, đã thu đủ hoặc khác khách hàng): ${skipped.join(', ')}`)
+    }
+  } finally {
+    await nextTick()
+    prefilling = false
+  }
+}
+
 watch(
   () => form.customer,
   (value, old) => {
+    if (prefilling) return
     if (!isEdit.value && old !== undefined && value !== old) {
       // Đổi khách hàng thì bỏ phân bổ cũ và hóa đơn ưu tiên (thuộc khách hàng khác).
       form.allocations.splice(0, form.allocations.length)
@@ -111,6 +148,8 @@ watch(
   },
   { immediate: true },
 )
+
+void prefillFromQuery()
 
 const outstandingMap = computed(() => Object.fromEntries(receivable.value.map((s) => [s.name, s.outstanding])))
 

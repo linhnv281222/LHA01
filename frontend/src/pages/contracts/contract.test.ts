@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cellText, checkField } from '@/standard'
+import { cellText, checkField, computeTotals, formatCurrency } from '@/standard'
 import type { Contract } from '@/types/doctypes'
 import {
   COLUMNS,
@@ -21,6 +21,7 @@ import {
   requestStatusOf,
   scheduleTotals,
   showScheduleTable,
+  statCards,
   type ScheduleRow,
   canActivate,
   canCancel,
@@ -387,15 +388,42 @@ describe('danh sách', () => {
     ])
   })
 
-  it('cột: STT và số hợp đồng ghim trái, thao tác ghim phải, hai cột tiền có dòng Tổng, không có cột đã thu', () => {
+  it('cột: STT và số hợp đồng ghim trái, thao tác ghim phải, các cột tiền có dòng Tổng kể cả Đã thu và Còn phải thu', () => {
     const byKey = Object.fromEntries(COLUMNS.map((c) => [c.key, c]))
     expect(byKey._index.pin).toBe('left')
     expect(byKey.contract_no.pin).toBe('left')
     expect(byKey._actions.pin).toBe('right')
     expect(byKey.total_before_tax.sum).toBe(true)
     expect(byKey.total_after_tax.sum).toBe(true)
-    expect(byKey).not.toHaveProperty('paid_amount')
-    expect(byKey).not.toHaveProperty('outstanding_amount')
+    expect(byKey.paid_amount.sum).toBe(true)
+    expect(byKey.outstanding_amount.sum).toBe(true)
+    expect(byKey.outstanding_amount.label).toBe('Còn phải thu (VND)')
+  })
+
+  it('dòng Tổng của cột Còn phải thu bằng tổng các dòng đang hiển thị', () => {
+    const rows = [{ outstanding_amount: 100 }, { outstanding_amount: 250.5 }, { outstanding_amount: 0 }] as Contract[]
+    expect(computeTotals(rows, COLUMNS).outstanding_amount).toBe(350.5)
+  })
+
+  it('thẻ số liệu: Đang hiệu lực, Tổng giá trị, Đã thu, Còn phải thu', () => {
+    const rows = [
+      { status: 'Đang hiệu lực', total_after_tax: 1000, paid_amount: 300, outstanding_amount: 700 },
+      { status: 'Nháp', total_after_tax: 500, paid_amount: 0, outstanding_amount: 0 },
+      { status: 'Đang hiệu lực', total_after_tax: 200, paid_amount: 200, outstanding_amount: 0 },
+    ] as Contract[]
+    const cards = statCards(rows)
+    expect(cards.map((c) => c.label)).toEqual([
+      'Đang hiệu lực',
+      'Tổng giá trị sau thuế (VND)',
+      'Đã thu (VND)',
+      'Còn phải thu (VND)',
+    ])
+    expect(cards[0].value).toBe(2)
+    expect(cards[0].status).toBeDefined()
+    expect(cards[0].key).toBe('Đang hiệu lực')
+    expect(cards[1].value).toBe(formatCurrency(1700))
+    expect(cards[2].value).toBe(formatCurrency(500))
+    expect(cards[3].value).toBe(formatCurrency(700))
   })
 })
 

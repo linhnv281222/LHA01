@@ -4,7 +4,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 export const router = createRouter({
   history: createWebHistory('/contracts'),
   routes: [
-    { path: '/', redirect: '/contract-types' },
+    { path: '/', redirect: '/payment-schedules' },
+    {
+      path: '/payment-schedules',
+      name: 'PaymentScheduleList',
+      component: () => import('./pages/payment-schedules/PaymentScheduleList.vue'),
+    },
     {
       path: '/contract-types',
       name: 'ContractTypeList',

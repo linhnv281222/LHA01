@@ -207,6 +207,32 @@ export function ensureBlankRow(items: ItemForm[]): void {
   if (!items.length || items[items.length - 1].schedule) items.push(emptyItem())
 }
 
+/**
+ * Điền sẵn các dòng đợt từ query `?schedules=`. Đợt hợp lệ khi có trong `openSchedules` (server cho phép xuất hóa đơn)
+ * và cùng khách hàng; đợt còn lại vào `skipped`. Luôn kèm 1 dòng trống ở cuối.
+ */
+export function prefillItems(
+  names: string[],
+  scheduleCustomers: Record<string, string>,
+  openSchedules: OpenSchedule[],
+  customer: string,
+): { items: ItemForm[]; skipped: string[] } {
+  const items: ItemForm[] = []
+  const skipped: string[] = []
+  for (const name of names) {
+    const open = openSchedules.find((s) => s.name === name)
+    if (!open || !customer || (scheduleCustomers[name] ?? customer) !== customer) {
+      skipped.push(name)
+      continue
+    }
+    const item = emptyItem()
+    applySchedule(item, { ...open, customer })
+    items.push(item)
+  }
+  ensureBlankRow(items)
+  return { items, skipped }
+}
+
 /** Chọn đợt cho một dòng: chép các trường chỉ đọc từ đợt. */
 export function applySchedule(item: ItemForm, schedule: OpenSchedule | undefined): void {
   Object.assign(item, {

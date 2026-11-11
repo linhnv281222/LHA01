@@ -308,6 +308,9 @@ class Contract(Document):
 			if before and before.status == STATUS_ACTIVE:
 				ps.delete_unbilled_schedules(self.name)
 
+		if self.has_value_changed("responsible_user"):
+			ps.sync_responsible_user(self.name, self.responsible_user)
+
 	# ---- xóa ----
 
 	def on_trash(self):

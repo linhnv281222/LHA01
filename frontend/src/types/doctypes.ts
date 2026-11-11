@@ -251,6 +251,8 @@ export interface PaymentSchedule {
   customer?: string | null
   /** Tên khách hàng */
   customer_name?: string | null
+  /** Người phụ trách */
+  responsible_user?: string | null
   /** Mã hạng mục */
   item_key?: string | null
   /** Hạng mục */

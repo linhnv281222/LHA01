@@ -9,6 +9,7 @@
   "contract",
   "customer",
   "customer_name",
+  "responsible_user",
   "item_key",
   "item_name",
   "schedule_name",
@@ -53,6 +54,15 @@
    "fieldname": "customer_name",
    "fieldtype": "Data",
    "label": "Tên khách hàng",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "contract.responsible_user",
+   "fieldname": "responsible_user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Người phụ trách",
+   "options": "User",
    "read_only": 1
   },
   {
@@ -175,7 +185,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-11 12:00:00.000000",
+ "modified": "2026-11-12 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Contract Tracker",
  "name": "Payment Schedule",

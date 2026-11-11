@@ -18,6 +18,7 @@ import {
   fmt,
   fromDoc,
   groupTree,
+  prefillAllocations,
   statCards,
   suggestAllocation,
   toFrappeFilters,
@@ -39,6 +40,33 @@ const SCHEDULES: ReceivableSchedule[] = [
   { name: 'DT-1', schedule_name: 'Tạm ứng', due_date: '2027-01-15', outstanding: 33_000_000, invoice: 'HDN-1' },
   { name: 'DT-3', schedule_name: 'Nghiệm thu', due_date: '2027-06-30', outstanding: 77_000_000, invoice: null },
 ]
+
+describe('prefillAllocations (mở từ Lịch thu tiền)', () => {
+  const customers = { 'DT-1': 'KH-1', 'DT-2': 'KH-1', 'DT-3': 'KH-2', 'DT-9': 'KH-1' }
+  it('số tiền = tổng còn nợ, mỗi đợt phân bổ đúng số còn nợ và qua kiểm tra phân bổ', () => {
+    const { allocations, amount, skipped } = prefillAllocations(['DT-1', 'DT-2'], customers, SCHEDULES, 'KH-1')
+    expect(skipped).toEqual([])
+    expect(amount).toBe(48_000_000)
+    expect(allocations.map((a) => [a.schedule, a.allocated_amount])).toEqual([
+      ['DT-1', 33_000_000],
+      ['DT-2', 15_000_000],
+      ['', null],
+    ])
+    const form = { ...emptyForm(), customer: 'KH-1', amount, allocations }
+    expect(validateAllocations(form, { 'DT-1': 33_000_000, 'DT-2': 15_000_000 })).toEqual({})
+  })
+  it('đợt khác khách hàng, không còn nợ hoặc không tồn tại nằm trong skipped', () => {
+    const { allocations, amount, skipped } = prefillAllocations(['DT-1', 'DT-3', 'DT-9'], customers, SCHEDULES, 'KH-1')
+    expect(skipped).toEqual(['DT-3', 'DT-9'])
+    expect(allocations.filter((a) => a.schedule)).toHaveLength(1)
+    expect(amount).toBe(33_000_000)
+  })
+  it('không đợt hợp lệ thì số tiền để trống', () => {
+    const r = prefillAllocations(['DT-9'], {}, [], 'KH-1')
+    expect(r.amount).toBeNull()
+    expect(r.allocations).toHaveLength(1)
+  })
+})
 
 describe('cột, nhóm, bộ lọc', () => {
   it('cột đúng thứ tự, ghim và cộng ở Tổng', () => {

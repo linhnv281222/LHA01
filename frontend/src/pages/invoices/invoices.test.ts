@@ -17,6 +17,7 @@ import {
   fromDoc,
   groupTree,
   isLocked,
+  prefillItems,
   statCards,
   statusOf,
   toFrappeFilters,
@@ -187,5 +188,28 @@ describe('chuyển dữ liệu', () => {
     expect(form.items[0].schedule).toBe('DT-1')
     expect(form.items[1].schedule).toBe('')
     expect(form.invoice_series).toBe('')
+  })
+})
+
+describe('prefillItems (mở từ Lịch thu tiền)', () => {
+  const customers = { 'DT-1': 'KH-1', 'DT-2': 'KH-1', 'DT-3': 'KH-2', 'DT-4': 'KH-1' }
+  it('điền đúng các đợt hợp lệ của khách hàng, kèm 1 dòng trống', () => {
+    const { items, skipped } = prefillItems(['DT-1', 'DT-2'], customers, [ADVANCE, LICENSE], 'KH-1')
+    expect(skipped).toEqual([])
+    expect(items.map((i) => i.schedule)).toEqual(['DT-1', 'DT-2', ''])
+    expect(items[0].total_amount).toBe(33_000_000)
+    expect(items[0].customer).toBe('KH-1')
+  })
+  it('bỏ qua đợt không còn xuất được hoặc khác khách hàng', () => {
+    const other = { ...ADVANCE, name: 'DT-3', customer: 'KH-2' }
+    const { items, skipped } = prefillItems(['DT-1', 'DT-3', 'DT-4'], customers, [ADVANCE, other], 'KH-1')
+    expect(items.map((i) => i.schedule)).toEqual(['DT-1', ''])
+    expect(skipped).toEqual(['DT-3', 'DT-4'])
+  })
+  it('không đợt nào hợp lệ thì chỉ còn dòng trống', () => {
+    const { items, skipped } = prefillItems(['DT-9'], {}, [], 'KH-1')
+    expect(items).toHaveLength(1)
+    expect(items[0].schedule).toBe('')
+    expect(skipped).toEqual(['DT-9'])
   })
 })

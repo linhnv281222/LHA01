@@ -29,6 +29,7 @@ import {
   emptyFilters,
   filtersActive,
   groupTree,
+  statCards,
   statusOf,
   toFrappeFilters,
   type Contract,
@@ -61,6 +62,9 @@ const list = useList<Contract>({
     'total_before_tax',
     'total_tax',
     'total_after_tax',
+    'invoiced_amount',
+    'paid_amount',
+    'outstanding_amount',
     'notes',
     'modified',
   ],
@@ -84,16 +88,7 @@ const rows = computed(() => list.data ?? [])
 const card = ref<string | null>(null)
 const tableRows = computed(() => (card.value ? rows.value.filter((r) => r.status === card.value) : rows.value))
 
-const cards = computed<StatCard[]>(() => {
-  const count = (s: string) => rows.value.filter((r) => r.status === s).length
-  const sum = rows.value.reduce((acc, r) => acc + Number(r.total_after_tax ?? 0), 0)
-  return [
-    { key: 'total', label: 'Tổng hợp đồng', value: rows.value.length },
-    { key: 'Nháp', label: 'Nháp', value: count('Nháp'), status: CONTRACT_STATUS['Nháp'] },
-    { key: 'Đang hiệu lực', label: 'Đang hiệu lực', value: count('Đang hiệu lực'), status: CONTRACT_STATUS['Đang hiệu lực'] },
-    { key: 'sum', label: 'Tổng giá trị sau thuế (VND)', value: formatCurrency(sum) },
-  ]
-})
+const cards = computed<StatCard[]>(() => statCards(rows.value))
 
 function search() {
   applied.value = JSON.parse(JSON.stringify(draft.value)) as PanelFilters
