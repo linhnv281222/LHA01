@@ -36,13 +36,14 @@ frontend/src/
 | `SplitLayout` | khung màn danh sách | slot `#group` (cây), `#filters` (ô lọc), mặc định (vùng phải); emit `search` (nút Tìm kiếm/Enter) |
 | `GroupTree` | "Truy vấn nhóm" | `:nodes` (TreeNode[] có `count`), `v-model` = key nút lá đang chọn |
 | `PageTitle` | tiêu đề trang | `title`, `count`; slot `#actions`: nút Xuất Excel (outline) rồi nút chính |
-| `StatCards` | thẻ số liệu | `:cards` (StatCard[]), `v-model:active` = thẻ trạng thái đang lọc |
+| `StatCards` | dải số liệu (các ô chung một khung) | `:cards` (StatCard[]), `v-model:active` = ô trạng thái đang lọc. StatCard: `tone` (green = tốt như đã thu, amber = cần chú ý như còn phải thu, red = quá hạn), `hint` (dòng phụ), `progress` (0-100, thanh tiến độ) |
 | `DataTable` | bảng danh sách | `:columns` (Column[]), `:rows`, `v-model:selected`, `:loading`, `:external-filter-active`; slot `#cell-<key>`; ref `exportExcel(tenFile)` |
-| `DetailPanel` | chi tiết dòng chọn, dưới bảng | `title`, `:fields` (DetailField[]); slot `#actions` (nút "Cập nhật"), mặc định (bảng phụ) |
-| `MiniTable` | bảng phụ nhỏ (lịch sử, dòng con trong chi tiết) | `:columns`, `:rows` |
-| `FormPage` | khung form | `title`, `back-to`, `:dirty`; emit `submit`; slot `#actions` (nút chính); ref `allowLeave()` sau khi lưu |
-| `FormSection` | nhóm ô trong form | `title`, `muted` (vùng phụ nền xám), `:columns` 1-3 |
-| `FnField` | MỌI ô nhập | `field`, `label`, `type` (text, number, currency, date, select, textarea, checkbox), `required`, `:error`, `hint`, `unit`, `:options`; emit `blur` |
+| `DetailPanel` | chi tiết dòng chọn, dưới bảng | `title`, `:fields` (DetailField[]; trống tự hiện "Không có"); slot `#badge` (StatusBadge cạnh tiêu đề), `#actions` (nút "Cập nhật", quick action), `#aside` (khối bên phải, ví dụ `StatCards` tóm tắt tiền), mặc định (bảng phụ) |
+| `MiniTable` | bảng phụ nhỏ (lịch sử, dòng con trong chi tiết) | `:columns`, `:rows`, `:totals` (dòng Tổng: giá trị theo key cột, cột đầu là nhãn) |
+| `FormPage` | khung form | `title`, `back-to`, `:dirty`; emit `submit`; slot `#actions` (nút chính), `#summary` (số tổng cập nhật khi nhập, ở thanh đáy); ref `allowLeave()` sau khi lưu |
+| `FormSection` | nhóm ô trong form | `title`, `muted` (vùng phụ nền xám), `:columns` 1-4 (ô ngắn dùng 4); ô rộng hơn đặt `class="col-span-2"` lên FnField |
+| `LineItems` | bảng nhập nhiều dòng trong form (hạng mục, dòng chi tiết) | `:columns` (LineColumn[]: `key`, `label`, `width` kiểu lưới CSS, `align`, `required`, `readonly` = cột tự tính), `:rows`, `add-label`, `:totals`; emit `add`, `remove(index)`; slot `#cell-<key>` (đặt `FnField hide-label`), `#extra` (ô phụ của dòng, hiện ngay dưới dòng) |
+| `FnField` | MỌI ô nhập | `field`, `label`, `type` (text, number, currency, date, select, textarea, checkbox), `required`, `:error`, `hint`, `unit`, `:options`, `hide-label` (chỉ trong `LineItems`: tiêu đề cột là nhãn); emit `blur` |
 | `PrimaryButton` | nút chính (màu chủ đạo) | như `Button` của frappe-ui; mỗi màn hình MỘT nút chính |
 | `StatusBadge` | trạng thái | `:status` (StatusDef: label + icon + tone) |
 
@@ -62,6 +63,9 @@ Hàm: `formatDate`, `formatDateTime`, `formatNumber`, `formatCurrency`, `maskSen
 ```
 
 - Mọi cột có `width` (px) hợp với nội dung: STT hẹp, tên rộng, ngày 120, tiền 140-170.
+- Tổng `width` các cột hiện mặc định không vượt khoảng 1.300px (màn 1600px không có thanh cuộn ngang). Cột quan trọng
+  (trạng thái, tiền) để trong tầm nhìn; cột ít dùng `hidden: true`. Hai thông tin liên quan gộp một cột 2 dòng qua slot
+  `#cell-<key>` (dòng trên chữ chính, dòng dưới `text-sm text-ink-gray-5`), ví dụ "Khách hàng / Nội dung", "Hiệu lực".
 - Ghim trái cột STT và cột mã/số; ghim phải cột Thao tác.
 - Cột số cùng đơn vị đặt `sum: true` thì bảng tự có dòng Tổng (tính trên dữ liệu đã lọc). Đơn vị ghi trong tiêu đề.
 - Cột ít dùng đặt `hidden: true` (người dùng bật lại bằng nút "Cột").
@@ -87,7 +91,10 @@ hiện khi tích đúng 1 loại; bảng gộp cột riêng thành "Thông tin c
 
 1. Form hơn 5 ô làm trang riêng với `FormPage`, không làm popup. Popup (`Dialog` của frappe-ui) chỉ cho
    xác nhận, thông báo, form dưới 5 ô; không popup chồng popup.
-2. Chia nhóm bằng `FormSection`: "Thông tin chung" trước, vùng phụ `muted`. Không tô xám cả form.
+2. Chia nhóm bằng `FormSection`: "Thông tin chung" trước (nền trắng), vùng phụ `muted`. Không tô xám cả form.
+   Các `FormSection` đặt thẳng trong `FormPage` (hoặc bọc trong `div class="space-y-4"`); không bọc bằng `class="contents"`
+   (mất khoảng cách giữa các khối). Dữ liệu dạng dòng (hạng mục, chi tiết) nhập bằng `LineItems`, không làm mỗi dòng một khung.
+   Form có số tiền: tổng cập nhật ngay ở slot `#summary` của `FormPage`.
 3. Mỗi ô là `FnField` với `field` = tên trường (để focus ô lỗi). Nhãn là danh từ, không dùng placeholder thay nhãn.
 4. Quy tắc kiểm tra khai báo trong `<ten>.ts` (`Rules<Form>`), trùng với kiểm tra ở controller Python.
    `useFormValidation(form, RULES)`; `@blur` gọi `validateField`; lưu thì `validateAll()` trước, sai thì DỪNG
@@ -110,7 +117,7 @@ Tự động kiểm (`scripts/check_ui.py` trong verify, sai là verify thất b
 - UI06 nhãn nút tiếng Việt, động từ cụ thể: "Lưu", "Trình ký", "Thêm hợp đồng", "Xuất Excel" (không "Submit", "OK").
 - UI08 không để `console.log`.
 - UI09 không import TextInput, Textarea, FormControl, Select, Combobox, DatePicker, Checkbox, ListView từ frappe-ui trong trang.
-- Menu: tối đa 9 mục cấp 1, tối đa 3 cấp (test `menu.test.ts`).
+- Menu: tối đa 9 mục cấp 1, tối đa 3 cấp (test `menu.test.ts`). Mục cùng nhóm đặt `group` (ví dụ "Chứng từ") và nằm liền nhau.
 
 Người duyệt kiểm (làm đúng ngay từ đầu):
 1. Không ngõ cụt: trang nào cũng có đường quay lại; thao tác chính không quá 3 lần bấm từ trang chủ.
