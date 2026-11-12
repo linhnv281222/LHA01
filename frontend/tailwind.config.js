@@ -8,16 +8,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Màu chủ đạo #1D5FA8; tiêu đề bảng màu vàng. Chỉ dùng qua lớp fn-* trong src/standard.
+        // Màu chủ đạo #1D5FA8; tiêu đề bảng xám nhạt, chỉ kẻ ngang. Chỉ dùng qua lớp fn-* trong src/standard.
         fn: {
           brand: '#1D5FA8',
           'brand-hover': '#174C86',
           'brand-soft': '#E8F0F9',
-          'table-head': '#FFF2C6',
-          'table-head-border': '#E8D48A',
-          zebra: '#F7F9FC',
-          pinned: '#F3F6FA',
-          selected: '#DCE9F7',
+          'table-head': '#F6F7F9',
+          'table-head-border': '#E4E7EB',
+          zebra: '#FAFBFC',
+          pinned: '#FFFFFF',
+          selected: '#EDF4FC',
+          line: '#EEF0F3',
         },
       },
     },

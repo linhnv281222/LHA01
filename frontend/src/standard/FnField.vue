@@ -2,6 +2,7 @@
 // Ô nhập chuẩn: nhãn ở trên (danh từ), dấu * đỏ khi trường bắt buộc còn trống và chuyển đen khi đã điền,
 // lỗi hiện ngay dưới ô (viền đỏ), nút xóa nhanh khi ô có giá trị, chọn từ danh sách có tìm kiếm và nút xóa.
 // Không dùng placeholder thay nhãn.
+// Ô mật khẩu (type="password"): nút ẩn/hiện có nhãn tiếng Việt, Tab tới được, không có nút xóa nhanh.
 import { computed, ref } from 'vue'
 import { Checkbox, Combobox, DatePicker, TextInput, Textarea } from 'frappe-ui'
 import { formatNumber, parseNumber } from './format'
@@ -13,7 +14,7 @@ const props = withDefaults(
     /** Tên trường; dùng để focus ô lỗi (data-field). */
     field: string
     label: string
-    type?: 'text' | 'number' | 'currency' | 'date' | 'select' | 'textarea' | 'checkbox'
+    type?: 'text' | 'number' | 'currency' | 'date' | 'select' | 'textarea' | 'checkbox' | 'password'
     required?: boolean
     error?: string
     hint?: string
@@ -24,8 +25,12 @@ const props = withDefaults(
     rows?: number
     /** Đơn vị hiển thị sau ô số, ví dụ "VND", "ngày". */
     unit?: string
+    /** Ẩn nhãn (vẫn đọc được bằng trình đọc màn hình). Dùng trong LineItems, nơi tiêu đề cột đã là nhãn. */
+    hideLabel?: boolean
+    /** Gợi ý tự điền của trình duyệt, ví dụ "username", "current-password", "new-password". */
+    autocomplete?: string
   }>(),
-  { type: 'text', required: false, error: '', hint: '', options: () => [], disabled: false, readonly: false, rows: 3, unit: '' },
+  { hideLabel: false, type: 'text', required: false, error: '', hint: '', options: () => [], disabled: false, readonly: false, rows: 3, unit: '', autocomplete: undefined },
 )
 const model = defineModel<any>()
 const emit = defineEmits<{ blur: [] }>()
@@ -48,6 +53,9 @@ function onNumberBlur() {
   emit('blur')
 }
 
+// Ô mật khẩu: mặc định ẩn; bấm nút để hiện/ẩn.
+const reveal = ref(false)
+
 function clear() {
   model.value = props.type === 'number' || props.type === 'currency' ? null : ''
   numberText.value = null
@@ -55,17 +63,18 @@ function clear() {
 </script>
 
 <template>
-  <div :data-field="field" class="space-y-1.5">
+  <div :data-field="field" :class="hideLabel ? 'space-y-1' : 'space-y-1.5'">
     <Checkbox
       v-if="type === 'checkbox'"
       :id="id"
       v-model="model"
-      :label="label"
+      :label="hideLabel ? undefined : label"
+      :aria-label="hideLabel ? label : undefined"
       :disabled="disabled || readonly"
       @update:model-value="emit('blur')"
     />
     <template v-else>
-      <label :for="id" class="flex items-center gap-0.5 text-sm-medium text-ink-gray-7">
+      <label :for="id" class="flex items-center gap-0.5 text-sm-medium text-ink-gray-7" :class="hideLabel ? 'sr-only' : ''">
         {{ label }}
         <span v-if="required" :class="filled ? 'text-ink-gray-9' : 'text-ink-red-6'" aria-hidden="true">*</span>
         <span v-if="required" class="sr-only">(bắt buộc)</span>
@@ -147,12 +156,39 @@ function clear() {
           </template>
         </TextInput>
         <TextInput
+          v-else-if="type === 'password'"
+          :id="id"
+          v-model="model"
+          :type="reveal ? 'text' : 'password'"
+          variant="outline"
+          :maxlength="maxlength"
+          :autocomplete="autocomplete ?? 'current-password'"
+          :disabled="disabled || readonly"
+          :aria-invalid="!!error"
+          :aria-describedby="describedBy"
+          @blur="emit('blur')"
+        >
+          <template #suffix>
+            <button
+              type="button"
+              class="flex size-6 items-center justify-center rounded-3 text-ink-gray-5 hover:bg-surface-gray-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-outline-blue-3"
+              :aria-label="reveal ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
+              :aria-pressed="reveal"
+              :disabled="disabled"
+              @click="reveal = !reveal"
+            >
+              <span :class="reveal ? 'lucide-eye-off' : 'lucide-eye'" class="size-4" aria-hidden="true" />
+            </button>
+          </template>
+        </TextInput>
+        <TextInput
           v-else
           :id="id"
           v-model="model"
           type="text"
           variant="outline"
           :maxlength="maxlength"
+          :autocomplete="autocomplete"
           :disabled="disabled || readonly"
           :aria-invalid="!!error"
           :aria-describedby="describedBy"

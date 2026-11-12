@@ -2,6 +2,8 @@
 // Trang form thêm mới / cập nhật (form > 5 ô thì làm trang, không làm popup):
 // - nút quay lại danh sách ở trên; focus ô đầu tiên khi mở
 // - thanh nút cố định ở đáy: "Hủy" (trung tính, bên trái) — các nút chính (bên phải, động từ cụ thể)
+// - slot "summary": số tổng cập nhật khi nhập (ví dụ Trước thuế · Thuế · Sau thuế), nằm trước các nút chính
+// - các khối (FormSection) đặt thẳng trong slot mặc định, hoặc bọc trong div có class space-y-4 (không dùng class contents)
 // - Enter = nút chính (form submit); rời trang khi có thay đổi chưa lưu thì hỏi xác nhận
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
@@ -83,8 +85,13 @@ function cancel() {
     <footer class="fixed inset-x-0 bottom-0 z-20 border-t border-outline-gray-2 bg-surface-base shadow-[0_-2px_8px_rgb(0_0_0/0.06)]">
       <div class="mx-auto flex max-w-[1200px] items-center justify-between gap-2 px-5 py-3">
         <Button size="md" variant="outline" label="Hủy" @click="cancel" />
-        <div class="flex items-center gap-2">
-          <slot name="actions" />
+        <div class="flex items-center gap-5">
+          <div v-if="$slots.summary" class="flex items-baseline gap-5 text-base text-ink-gray-6 tabular-nums">
+            <slot name="summary" />
+          </div>
+          <div class="flex items-center gap-2">
+            <slot name="actions" />
+          </div>
         </div>
       </div>
     </footer>

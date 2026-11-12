@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="T extends Record<string, any>">
 // Bảng danh sách chuẩn:
-// - tiêu đề vàng, hàng lọc ngay dưới, bấm tiêu đề để sắp xếp
+// - tiêu đề xám nhạt, chỉ kẻ ngang (không kẻ dọc), hàng lọc ngay dưới, bấm tiêu đề để sắp xếp
+// - ô nhiều dòng (ví dụ tên + mô tả) đặt qua slot cell-<key>; dòng tự cao theo nội dung
 // - 20 dòng/trang (16 với bảng tiêu đề 2 cấp), chọn 20/50/100, ô "Đến trang", "(a-b / tổng)"
 // - dòng chẵn lẻ khác màu, ghim cột trái/phải có bóng, nút ẩn/hiện cột
 // - dòng Tổng dính đáy, tính trên toàn bộ dữ liệu đã lọc
@@ -150,7 +151,7 @@ defineExpose({ exportExcel, filteredRows: sorted, clearColumnFilters: () => (col
 </script>
 
 <template>
-  <div class="fn-table rounded-4 border border-outline-gray-2 bg-surface-base">
+  <div class="fn-table overflow-hidden rounded-6 border border-outline-gray-2 bg-surface-base">
     <div class="flex items-center justify-between gap-2 border-b border-outline-gray-1 px-3 py-1.5">
       <span class="text-sm text-ink-gray-6">{{ caption }}</span>
       <Popover>
@@ -194,7 +195,7 @@ defineExpose({ exportExcel, filteredRows: sorted, clearColumnFilters: () => (col
               <button
                 v-if="col.sortable !== false && col.type !== 'index'"
                 type="button"
-                class="inline-flex w-full items-center gap-1 text-sm-semibold text-ink-gray-9"
+                class="inline-flex w-full items-center gap-1 text-sm-semibold text-ink-gray-7 hover:text-ink-gray-9"
                 :class="col.align === 'right' || col.type === 'number' || col.type === 'currency' ? 'justify-end' : ''"
                 @click="toggleSort(col)"
               >
@@ -211,7 +212,7 @@ defineExpose({ exportExcel, filteredRows: sorted, clearColumnFilters: () => (col
                   aria-hidden="true"
                 />
               </button>
-              <span v-else class="text-sm-semibold text-ink-gray-9">{{ col.label }}</span>
+              <span v-else class="text-sm-semibold text-ink-gray-7">{{ col.label }}</span>
             </th>
           </tr>
           <tr class="fn-filter-row">
@@ -326,10 +327,10 @@ defineExpose({ exportExcel, filteredRows: sorted, clearColumnFilters: () => (col
   top: 0;
   z-index: 2;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 12px;
   background: theme('colors.fn.table-head');
   border-bottom: 1px solid theme('colors.fn.table-head-border');
-  border-right: 1px solid theme('colors.fn.table-head-border');
+  white-space: nowrap;
 }
 .fn-th-filter {
   position: sticky;
@@ -339,7 +340,6 @@ defineExpose({ exportExcel, filteredRows: sorted, clearColumnFilters: () => (col
   padding: 3px 6px;
   background: theme('colors.fn.table-head');
   border-bottom: 1px solid theme('colors.fn.table-head-border');
-  border-right: 1px solid theme('colors.fn.table-head-border');
 }
 .fn-th.fn-pinned,
 .fn-th-filter.fn-pinned {
@@ -365,10 +365,9 @@ defineExpose({ exportExcel, filteredRows: sorted, clearColumnFilters: () => (col
   color: var(--ink-gray-8);
 }
 .fn-td {
-  height: 36px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--outline-gray-1);
-  border-right: 1px solid var(--outline-gray-1);
+  height: 40px;
+  padding: 6px 12px;
+  border-bottom: 1px solid theme('colors.fn.line');
   background: var(--surface-base);
   color: var(--ink-gray-8);
   max-width: 0;
@@ -382,33 +381,39 @@ defineExpose({ exportExcel, filteredRows: sorted, clearColumnFilters: () => (col
   background: theme('colors.fn.pinned');
 }
 .fn-row:hover .fn-td {
-  background: var(--surface-gray-2);
+  background: var(--surface-gray-1);
 }
 .fn-row-selected .fn-td,
 .fn-row-selected:hover .fn-td {
   background: theme('colors.fn.selected');
-  font-weight: 500;
+}
+.fn-row-selected .fn-td:first-child {
+  box-shadow: inset 3px 0 0 theme('colors.fn.brand');
 }
 .fn-row:focus-visible {
   outline: 2px solid theme('colors.fn.brand');
   outline-offset: -2px;
 }
 .fn-pin-edge-left {
-  box-shadow: 4px 0 6px -3px rgb(0 0 0 / 0.18);
+  box-shadow: 4px 0 6px -4px rgb(0 0 0 / 0.14);
 }
 .fn-pin-edge-right {
-  box-shadow: -4px 0 6px -3px rgb(0 0 0 / 0.18);
+  box-shadow: -4px 0 6px -4px rgb(0 0 0 / 0.14);
+}
+.fn-row-selected .fn-td.fn-pin-edge-left:first-child {
+  box-shadow: inset 3px 0 0 theme('colors.fn.brand'), 4px 0 6px -4px rgb(0 0 0 / 0.14);
 }
 .fn-td-total {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  height: 36px;
-  padding: 0 10px;
-  background: theme('colors.fn.brand-soft');
-  border-top: 2px solid theme('colors.fn.brand');
+  height: 40px;
+  padding: 0 12px;
+  background: theme('colors.fn.zebra');
+  border-top: 1px solid var(--outline-gray-2);
   font-weight: 600;
   color: var(--ink-gray-9);
+  white-space: nowrap;
 }
 .fn-td-total.fn-pinned {
   z-index: 3;

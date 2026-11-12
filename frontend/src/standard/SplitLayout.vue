@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Bố cục chia đôi của màn danh sách:
 // - Panel trái 260px, cố định khi cuộn, cao bằng màn hình:
-//   "Truy vấn nhóm" (ô tìm kiếm TRÊN cây) → kẻ xanh → "Truy vấn chi tiết" (các ô lọc).
+//   "Truy vấn nhóm" (ô tìm kiếm TRÊN cây) → kẻ ngang → "Truy vấn chi tiết" (các ô lọc).
 //   Hai tiêu đề dính (sticky). Nút "Tìm kiếm" rộng hết panel, cố định ở đáy. Enter trong ô lọc = Tìm kiếm.
 // - Vùng phải: tiêu đề trang, thẻ số liệu, bảng, chi tiết dòng chọn (do trang tự đặt vào slot mặc định).
 import { Button } from 'frappe-ui'
@@ -33,7 +33,7 @@ const emit = defineEmits<{ search: [] }>()
               <slot name="group" />
             </div>
           </section>
-          <div v-if="showGroup" class="mx-3 border-t-2 border-fn-brand" role="separator" />
+          <div v-if="showGroup" class="mx-3 border-t border-outline-gray-2" role="separator" />
           <section aria-labelledby="fn-filter-title">
             <h2 id="fn-filter-title" class="fn-panel-title">{{ filterTitle }}</h2>
             <div class="space-y-3 px-3 pb-4 pt-2">
@@ -56,7 +56,7 @@ const emit = defineEmits<{ search: [] }>()
       </form>
     </aside>
 
-    <main class="min-w-0 space-y-3 bg-surface-gray-1 px-4 pb-10 pt-3">
+    <main class="min-w-0 space-y-3 bg-surface-gray-1 px-5 pb-10 pt-4">
       <slot />
     </main>
   </div>
@@ -67,12 +67,12 @@ const emit = defineEmits<{ search: [] }>()
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 10px 12px 6px;
+  padding: 14px 12px 6px;
   background: var(--surface-base);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #1d5fa8;
+  color: var(--ink-gray-5);
 }
 </style>
