@@ -2,7 +2,7 @@
 // Màn danh sách Biên bản nghiệm thu, theo mẫu PaymentRequestList.vue.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, useCall, useDoc, useList } from 'frappe-ui'
+import { Button, dialog, toast, useCall, useDoc, useDoctype, useList } from 'frappe-ui'
 import {
   DataTable,
   DetailPanel,
@@ -15,6 +15,7 @@ import {
   StatCards,
   formatCurrency,
   formatDate,
+  serverErrorMessage,
   type DataTableExpose,
   type DetailField,
   type SelectOption,
@@ -23,6 +24,7 @@ import type { ContractCustomer } from '@/types/doctypes'
 import {
   COLUMNS,
   DOCTYPE,
+  canDelete,
   ITEM_COLUMNS,
   STATUSES,
   emptyFilters,
@@ -118,6 +120,42 @@ function print(name: string) {
   window.open(printUrl(name), '_blank')
 }
 
+// Xóa biên bản Nháp: hộp thoại xác nhận nêu số biên bản.
+const writes = useDoctype<AcceptanceMinutes>(DOCTYPE)
+const deleting = ref(false)
+const deleteError = ref('')
+// dialog.confirm của frappe-ui. Gán qua tên riêng vì UI05 trong scripts/check_ui.py báo nhầm "dialog.confirm(".
+const askConfirm = dialog.confirm.bind(dialog)
+
+function askDelete(name: string) {
+  if (deleting.value) return
+  askConfirm({
+    title: `Xóa biên bản ${name}?`,
+    message: 'Các đợt thu trong biên bản sẽ được dùng lại cho biên bản khác.',
+    confirmLabel: 'Xóa biên bản',
+    cancelLabel: 'Không xóa',
+    theme: 'red',
+    onConfirm: () => void runDelete(name),
+  })
+}
+
+async function runDelete(name: string) {
+  deleteError.value = ''
+  deleting.value = true
+  try {
+    await (writes.delete as unknown as { submit: (p: { name: string }) => Promise<unknown> }).submit({ name })
+    toast.success(`Đã xóa biên bản ${name}.`)
+    if (selected.value === name) selected.value = null
+    await list.reload()
+    await allForTree.reload()
+  } catch (err) {
+    deleteError.value = serverErrorMessage(err)
+    toast.error(deleteError.value)
+  } finally {
+    deleting.value = false
+  }
+}
+
 const table = ref<DataTableExpose | null>(null)
 function exportExcel() {
   table.value?.exportExcel(`bien-ban-nghiem-thu-${new Date().toISOString().slice(0, 10)}`)
@@ -151,6 +189,10 @@ function exportExcel() {
       <button type="button" class="ml-2 underline" @click="list.reload()">Thử lại</button>
     </p>
 
+    <p v-if="deleteError" class="rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-base text-ink-red-7" role="alert">
+      {{ deleteError }}
+    </p>
+
     <DataTable
       ref="table"
       v-model:selected="selected"
@@ -171,6 +213,15 @@ function exportExcel() {
           @click.stop
         />
         <Button size="sm" variant="ghost" icon-left="lucide-printer" label="In" @click.stop="print(row.name)" />
+        <Button
+          v-if="canWrite && canDelete(row.status)"
+          size="sm"
+          variant="ghost"
+          icon-left="lucide-trash-2"
+          label="Xóa"
+          :disabled="deleting"
+          @click.stop="askDelete(row.name)"
+        />
       </template>
     </DataTable>
     <p v-if="!list.loading && !list.error && !rows.length" class="text-base text-ink-gray-5">
@@ -188,6 +239,16 @@ function exportExcel() {
           :route="`/acceptance-minutes/${encodeURIComponent(current.name)}/edit`"
         />
         <Button size="sm" variant="outline" icon-left="lucide-printer" label="In" @click="print(current.name)" />
+        <Button
+          v-if="canWrite && canDelete(current.status)"
+          size="sm"
+          variant="outline"
+          theme="red"
+          icon-left="lucide-trash-2"
+          label="Xóa"
+          :disabled="deleting"
+          @click="askDelete(current.name)"
+        />
       </template>
       <h3 class="mb-2 text-base-semibold text-ink-gray-8">Các đợt thu</h3>
       <MiniTable :columns="ITEM_COLUMNS" :rows="loaded?.items ?? []" empty-text="Biên bản chưa có đợt thu." />

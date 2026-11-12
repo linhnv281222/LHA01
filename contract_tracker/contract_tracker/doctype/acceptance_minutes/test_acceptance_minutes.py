@@ -188,6 +188,14 @@ class TestAcceptanceMinutes(IntegrationTestCase):
 		doc.save()
 		self.assertEqual(frappe.db.get_value(DT, doc.name, "notes"), "Đã lưu kho")
 
+	def test_signed_notes_editable_after_item_no_longer_required(self):
+		doc = self.signed()
+		need_acceptance(self.advance, value=0)
+		doc.reload()
+		doc.notes = "Ghi chú sau khi ký"
+		doc.save()
+		self.assertEqual(frappe.db.get_value(DT, doc.name, "notes"), "Ghi chú sau khi ký")
+
 	def test_signed_cannot_delete(self):
 		doc = self.signed()
 		with self.assertRaises(frappe.ValidationError) as cm:

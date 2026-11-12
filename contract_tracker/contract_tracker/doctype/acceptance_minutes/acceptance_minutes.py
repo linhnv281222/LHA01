@@ -106,7 +106,11 @@ class AcceptanceMinutes(Document):
 			frappe.throw(_(MSG_NO_ITEMS))
 		before = self.get_doc_before_save()
 		old_schedules = {r.schedule for r in before.items} if before else set()
-		names = [r.schedule for r in rows]
+		# Biên bản đã ký và danh sách đợt không đổi (guard_status đã chặn đổi): chỉ sửa ghi chú/file scan,
+		# không kiểm tra lại đợt để hạng mục đổi sang "Không cần" sau khi ký không làm hỏng biên bản.
+		if before and before.status == STATUS_SIGNED and [r.schedule for r in rows] == [r.schedule for r in before.items]:
+			return
+		names =[r.schedule for r in rows]
 		taken = minutes_by_schedule(names, exclude_minutes=self.name)
 		seen = set()
 		for row in rows:

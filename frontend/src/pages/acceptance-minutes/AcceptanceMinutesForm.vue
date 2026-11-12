@@ -144,10 +144,14 @@ async function prefillFromQuery() {
 }
 
 // Đại diện bên A mặc định là người liên hệ của khách hàng (chỉ khi ô còn trống).
+let autoPartyA = ''
 function fillPartyA() {
-  if (form.party_a_rep || isEdit.value) return
-  const contact = customers.data?.find((c) => c.name === form.customer)?.contact_person
-  if (contact) form.party_a_rep = contact
+  if (isEdit.value) return
+  // Giá trị đang là mặc định tự điền (hoặc trống) thì được thay theo khách hàng hiện tại.
+  if (form.party_a_rep && form.party_a_rep !== autoPartyA) return
+  const contact = customers.data?.find((c) => c.name === form.customer)?.contact_person ?? ''
+  autoPartyA = contact
+  form.party_a_rep = contact
 }
 watch(() => customers.data, fillPartyA)
 

@@ -19,15 +19,15 @@
 		<tr>
 			<td>
 				<b>Bên A (Khách hàng)</b><br>
-				Tên đơn vị: {{ doc.customer_name or customer.get("customer_name") or "" }}<br>
-				Địa chỉ: {{ customer.get("address") or "" }}<br>
-				Mã số thuế: {{ customer.get("tax_code") or "" }}<br>
-				Người đại diện: {{ doc.party_a_rep or "" }}
+				Tên đơn vị: {{ (doc.customer_name or customer.get("customer_name") or "") | e }}<br>
+				Địa chỉ: {{ (customer.get("address") or "") | e }}<br>
+				Mã số thuế: {{ (customer.get("tax_code") or "") | e }}<br>
+				Người đại diện: {{ (doc.party_a_rep or "") | e }}
 			</td>
 			<td>
 				<b>Bên B</b><br>
 				Tên đơn vị: CÔNG TY LHA<br>
-				Người đại diện: {{ doc.party_b_rep or "" }}
+				Người đại diện: {{ (doc.party_b_rep or "") | e }}
 			</td>
 		</tr>
 	</table>
@@ -50,8 +50,8 @@
 			{%- for row in doc.items %}
 			<tr>
 				<td class="center">{{ loop.index }}</td>
-				<td>{{ row.contract or "" }}</td>
-				<td>{{ row.item_name or "" }} - {{ row.schedule_name or "" }}{% if row.period_from %} ({{ row.get_formatted("period_from") }} - {{ row.get_formatted("period_to") }}){% endif %}</td>
+				<td>{{ (row.contract or "") | e }}</td>
+				<td>{{ (row.item_name or "") | e }} - {{ (row.schedule_name or "") | e }}{% if row.period_from %} ({{ row.get_formatted("period_from") }} - {{ row.get_formatted("period_to") }}){% endif %}</td>
 				<td class="num">{{ row.get_formatted("amount_before_tax") }}</td>
 				<td class="num">{{ row.get_formatted("tax_amount") }}</td>
 				<td class="num">{{ row.get_formatted("total_amount") }}</td>
@@ -65,7 +65,7 @@
 			</tr>
 		</tbody>
 	</table>
-	{% if doc.notes %}<p><b>Ghi chú:</b> {{ doc.notes }}</p>{% endif %}
+	{% if doc.notes %}<p><b>Ghi chú:</b> {{ doc.notes | e }}</p>{% endif %}
 
 	<table class="sign">
 		<tr>
