@@ -108,6 +108,8 @@ describe('bộ lọc', () => {
     expect(toFrappeFilters({ ...emptyFilters(), dateFrom: '2027-01-01' }).request_date).toEqual(['>=', '2027-01-01'])
     expect(toFrappeFilters({ ...emptyFilters(), dateTo: '2027-01-31' }).request_date).toEqual(['<=', '2027-01-31'])
     expect(toFrappeFilters({ ...emptyFilters(), groups: [] })).toEqual({ name: ['in', []] })
+    // Nhập Số đề nghị cũng không làm mất điều kiện rỗng.
+    expect(toFrappeFilters({ ...emptyFilters(), groups: [], requestNo: '0001' })).toEqual({ name: ['in', []] })
   })
 })
 

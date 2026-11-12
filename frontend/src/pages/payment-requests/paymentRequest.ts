@@ -119,8 +119,9 @@ export function emptyFilters(): PanelFilters {
 export function toFrappeFilters(f: PanelFilters): Record<string, any> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filters: Record<string, any> = {}
-  if (f.groups.length === 0) filters.name = ['in', []]
-  else if (f.groups.length < STATUSES.length) filters.status = ['in', f.groups]
+  // Bỏ chọn hết nhóm: trả điều kiện không khớp bản ghi nào, không để ô Số đề nghị ghi đè.
+  if (f.groups.length === 0) return { name: ['in', []] }
+  if (f.groups.length < STATUSES.length) filters.status = ['in', f.groups]
   if (f.customer) filters.customer = f.customer
   if (f.dateFrom && f.dateTo) filters.request_date = ['between', [f.dateFrom, f.dateTo]]
   else if (f.dateFrom) filters.request_date = ['>=', f.dateFrom]
