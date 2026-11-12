@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Quản lý hợp đồng">
+  <rect width="64" height="64" rx="14" fill="#2563eb"/>
+  <path d="M18 10h20l10 10v32a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2z" fill="#ffffff"/>
+  <path d="M38 10v10h10z" fill="#bfdbfe"/>
+  <path d="M22 28h20M22 35h14" stroke="#93c5fd" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M25 45l5 5 10-11" stroke="#16a34a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

@@ -14,7 +14,27 @@ from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule
 	request_by_schedule,
 )
 
+from contract_tracker.setup import ROLES as APP_ROLES
+
 BANK_FIELDS = ("bank_account_holder", "bank_account_no", "bank_name", "bank_branch")
+
+
+def _has_app_role(user: str) -> bool:
+	return bool(set(APP_ROLES) & set(frappe.get_roles(user)))
+
+
+def has_app_permission() -> bool:
+	"""Ô ứng dụng trên /apps: Administrator hoặc có vai trò của app. Chỉ do hook gọi, không whitelist."""
+	user = frappe.session.user
+	return user == "Administrator" or _has_app_role(user)
+
+
+def get_home_page(user: str | None = None) -> str | None:
+	"""Trang chủ sau đăng nhập: có vai trò app và không phải Administrator thì vào /contracts; còn lại mặc định."""
+	user = user or frappe.session.user
+	if user in ("Administrator", "Guest"):
+		return None
+	return "contracts" if _has_app_role(user) else None
 
 
 @frappe.whitelist()
