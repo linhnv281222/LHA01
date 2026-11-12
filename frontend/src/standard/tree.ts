@@ -7,6 +7,8 @@ export interface TreeNode {
   /** Icon lucide của nút, ví dụ "lucide-folder". Không có thì dùng icon theo cấp. */
   icon?: string
   count?: number
+  /** Chữ đầy đủ khi rê chuột (nhãn ngắn trên cây, ví dụ bỏ "Công ty TNHH"). Mặc định = label. */
+  title?: string
   children?: TreeNode[]
 }
 

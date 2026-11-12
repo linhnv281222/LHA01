@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyLayout,
+  inRect,
+  moveCell,
+  rectOf,
+  selectionToTsv,
+  autofitWidth,
+  headerSegments,
   applyColumnFilters,
   computeTotals,
   nextSort,
@@ -71,5 +78,61 @@ describe('bảng chuẩn', () => {
     expect(csv.startsWith('﻿')).toBe(true)
     expect(csv).toContain('STT,Mã,Tên,Giá trị (VND),TT')
     expect(csv).toContain('1,A1,Hợp đồng thuê nhà,1000,x')
+  })
+
+  it('Excel: khóa đến cột / từ cột, độ rộng người dùng kéo', () => {
+    const cols = [
+      { key: 'a', label: 'A', width: 50, pin: 'left' as const },
+      { key: 'b', label: 'B', width: 100 },
+      { key: 'c', label: 'C', width: 100 },
+      { key: 'd', label: 'D', width: 80, pin: 'right' as const },
+    ]
+    const pins = (l: any) => applyLayout(cols, l).map((c) => c.pin ?? '-').join('')
+    expect(pins({ widths: {} })).toBe('left--right')
+    expect(pins({ widths: {}, leftUntil: 'b' })).toBe('leftleft-right')
+    expect(pins({ widths: {}, leftUntil: null, rightFrom: null })).toBe('----')
+    expect(pins({ widths: {}, leftUntil: 'c', rightFrom: 'b' })).toBe('leftleftleftright')
+    expect(applyLayout(cols, { widths: { b: 20, c: 180.4 } }).map((c) => c.width)).toEqual([50, 48, 180, 80])
+  })
+
+  it('Excel: tiêu đề 2 cấp gộp cột liền nhau cùng nhóm; nhấp đúp vừa nội dung', () => {
+    const seg = headerSegments([
+      { key: 'no', label: 'Số', width: 1 },
+      { key: 'f', label: 'Từ', width: 1, group: 'Hiệu lực' },
+      { key: 't', label: 'Đến', width: 1, group: 'Hiệu lực' },
+      { key: 'v', label: 'Giá trị', width: 1 },
+    ])
+    expect(seg).toEqual([
+      { group: '', keys: ['no'] },
+      { group: 'Hiệu lực', keys: ['f', 't'] },
+      { group: '', keys: ['v'] },
+    ])
+    expect(autofitWidth(['ab', 'abcdef'], (s) => s.length * 10)).toBe(100)
+    expect(autofitWidth([], () => 0)).toBe(48)
+    expect(autofitWidth(['x'.repeat(100)], (s) => s.length * 10)).toBe(600)
+  })
+
+  it('Excel: sao chép vùng chọn thành TSV, số giữ dạng số, có tiêu đề nhóm', () => {
+    const cols = [
+      { key: '_i', label: 'STT', width: 1, type: 'index' as const },
+      { key: 'no', label: 'Số', width: 1 },
+      { key: 'v', label: 'Sau thuế', width: 1, type: 'currency' as const, group: 'Giá trị' },
+    ]
+    const rows = [
+      { no: 'HĐ-1', v: 1234567 },
+      { no: 'HĐ\t2', v: 10 },
+    ]
+    expect(selectionToTsv(rows, cols, rectOf({ r: 1, c: 2 }, { r: 0, c: 0 }), false, 20)).toBe('21\tHĐ-1\t1234567\r\n22\tHĐ 2\t10')
+    expect(selectionToTsv(rows, cols, { r1: 0, c1: 1, r2: 0, c2: 2 }, true)).toBe('Số\tGiá trị - Sau thuế\r\nHĐ-1\t1234567')
+    expect(inRect({ r1: 0, c1: 0, r2: 1, c2: 1 }, 1, 1)).toBe(true)
+    expect(inRect(null, 0, 0)).toBe(false)
+  })
+
+  it('Excel: phím di chuyển ô trong giới hạn bảng', () => {
+    expect(moveCell({ r: 0, c: 0 }, 'ArrowUp', 5, 4)).toEqual({ r: 0, c: 0 })
+    expect(moveCell({ r: 2, c: 1 }, 'ArrowDown', 5, 4, true)).toEqual({ r: 4, c: 1 })
+    expect(moveCell({ r: 2, c: 1 }, 'End', 5, 4)).toEqual({ r: 2, c: 3 })
+    expect(moveCell({ r: 2, c: 1 }, 'Home', 5, 4, true)).toEqual({ r: 0, c: 0 })
+    expect(moveCell({ r: 2, c: 3 }, 'Tab', 5, 4)).toEqual({ r: 2, c: 3 })
   })
 })
