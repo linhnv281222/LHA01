@@ -242,6 +242,23 @@ class TestPaymentSchedule(IntegrationTestCase):
 		doc.save()
 		self.assertEqual([r.name for r in schedules(doc.name) if r.item_name == "License"], [first.name])
 
+	def test_refresh_schedules_request_status(self):
+		from contract_tracker.contract_tracker.doctype.payment_request.test_payment_request import make_request
+		from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import request_by_schedule
+
+		doc = active(example_contract())
+		first, second = [r.name for r in schedules(doc.name)][:2]
+		self.assertEqual(frappe.db.get_value(DT, first, "request_status"), "Chưa lập")
+		request = make_request(doc.customer, [first]).insert()
+		self.assertEqual(request_by_schedule([first, second]), {first: request.name})
+		self.assertEqual(request_by_schedule([first], exclude_request=request.name), {})
+		self.assertEqual(frappe.db.get_value(DT, first, "request_status"), "Đã lập")
+		self.assertEqual(frappe.db.get_value(DT, second, "request_status"), "Chưa lập")
+		refresh_schedules([first], exclude_request=request.name)
+		self.assertEqual(frappe.db.get_value(DT, first, "request_status"), "Chưa lập")
+		refresh_schedules([first])
+		self.assertEqual(frappe.db.get_value(DT, first, "request_status"), "Đã lập")
+
 	def test_refresh_schedules_ignores_missing(self):
 		refresh_schedules(["", None, "DT-KHONG-CO"])
 

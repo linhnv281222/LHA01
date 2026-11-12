@@ -29,6 +29,7 @@ import {
   ensureBlankRow,
   fromDoc,
   isLocked,
+  mergeRequestRows,
   prefillItems,
   toPayload,
   validateItems,
@@ -157,6 +158,49 @@ function optionsFor(index: number): SelectOption[] {
     options.push({ label: form.items[index].schedule_name || current, value: current })
   }
   return options
+}
+
+// "Lấy từ đề nghị thanh toán": thêm các đợt chưa xuất hóa đơn của đề nghị vào bảng. Ô này không lưu vào hóa đơn.
+const fromRequest = ref<string | null>(null)
+const requestList = useList<{ name: string; request_date: string; grand_total: number }>({
+  doctype: 'Payment Request',
+  fields: ['name', 'request_date', 'grand_total'],
+  filters: () => ({ customer: form.customer || '__none__' }),
+  orderBy: 'modified desc',
+  limit: 200,
+})
+const requestOptions = computed<SelectOption[]>(() =>
+  form.customer
+    ? (requestList.data ?? []).map((r) => ({ label: `${r.name} (${formatCurrency(r.grand_total)} VND)`, value: r.name }))
+    : [],
+)
+const importCall = useCall<{ rows: OpenSchedule[]; skipped: OpenSchedule[] }, { payment_request: string; customer: string; invoice?: string }>({
+  url: '/api/v2/method/contract_tracker.api.get_request_schedules_for_invoice',
+  method: 'POST',
+  immediate: false,
+})
+async function importFromRequest(value: string | null) {
+  fromRequest.value = value
+  if (!value || !form.customer) return
+  try {
+    const res = (await importCall.submit({
+      payment_request: value,
+      customer: form.customer,
+      ...(props.name ? { invoice: props.name } : {}),
+    })) as { rows?: OpenSchedule[]; skipped?: OpenSchedule[]; data?: unknown; message?: unknown } | null
+    const body = ((res?.data ?? res?.message ?? res) ?? {}) as { rows?: OpenSchedule[]; skipped?: OpenSchedule[] }
+    clearItemErrors()
+    mergeRequestRows(form.items, body.rows ?? [], form.customer)
+    const skipped = body.skipped ?? []
+    if (skipped.length) {
+      toast.warning(`Đã bỏ qua ${skipped.length} đợt (đã nằm trong hóa đơn hiệu lực hoặc hợp đồng không xuất hóa đơn được): ${skipped.map((s) => s.schedule_name ?? s.name).join(', ')}`)
+    }
+  } catch (err) {
+    toast.error(serverErrorMessage(err))
+  } finally {
+    await nextTick()
+    fromRequest.value = null
+  }
 }
 
 function pickSchedule(index: number, value: string | null) {
@@ -313,6 +357,16 @@ async function runCancel() {
       <FormSection title="Các đợt thu" :columns="1">
         <p v-if="!form.customer" class="text-base text-ink-gray-5">Chọn khách hàng để chọn các đợt chưa xuất hóa đơn.</p>
         <div v-else data-field="items" class="space-y-3">
+          <FnField
+            :model-value="fromRequest"
+            field="from_request"
+            label="Lấy từ đề nghị thanh toán"
+            type="select"
+            :options="requestOptions"
+            :disabled="readOnly || !form.customer"
+            hint="Chọn một đề nghị để thêm các đợt chưa xuất hóa đơn vào bảng."
+            @update:model-value="(v: string | null) => importFromRequest(v)"
+          />
           <div
             v-for="(item, i) in form.items"
             :key="i"

@@ -287,18 +287,25 @@ export interface ActionState {
 
 const names = (rows: ScheduleListRow[]) => rows.map((r) => r.schedule_name || r.name).join(', ')
 
-export function actionState(pickedRows: ScheduleListRow[]): { invoice: ActionState; receipt: ActionState } {
+export function actionState(pickedRows: ScheduleListRow[]): {
+  invoice: ActionState
+  receipt: ActionState
+  request: ActionState
+} {
   if (!pickedRows.length) {
     const off = { enabled: false, reason: MSG_NO_SELECTION }
-    return { invoice: off, receipt: { ...off } }
+    return { invoice: off, receipt: { ...off }, request: { ...off } }
   }
   const invoiced = pickedRows.filter((r) => (r.invoice_status || 'Chưa xuất') !== 'Chưa xuất')
   const paid = pickedRows.filter((r) => r.payment_status === 'Đã thu' || outstandingOf(r) <= 0)
+  const paidState = paid.length ? { enabled: false, reason: fmt(MSG_PAID, names(paid)) } : { enabled: true, reason: '' }
   return {
     invoice: invoiced.length
       ? { enabled: false, reason: fmt(MSG_INVOICED, names(invoiced)) }
       : { enabled: true, reason: '' },
-    receipt: paid.length ? { enabled: false, reason: fmt(MSG_PAID, names(paid)) } : { enabled: true, reason: '' },
+    receipt: paidState,
+    // Đợt đã "Đã lập" vẫn chọn được: hệ thống báo trùng khi lưu.
+    request: { ...paidState },
   }
 }
 

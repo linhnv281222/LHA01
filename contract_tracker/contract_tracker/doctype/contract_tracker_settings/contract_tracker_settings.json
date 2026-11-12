@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-12 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "bank_section",
+  "bank_account_holder",
+  "bank_account_no",
+  "column_break_1",
+  "bank_name",
+  "bank_branch"
+ ],
+ "fields": [
+  {
+   "description": "Điền sẵn vào Đề nghị thanh toán mới.",
+   "fieldname": "bank_section",
+   "fieldtype": "Section Break",
+   "label": "Tài khoản nhận tiền"
+  },
+  {
+   "fieldname": "bank_account_holder",
+   "fieldtype": "Data",
+   "label": "Chủ tài khoản"
+  },
+  {
+   "fieldname": "bank_account_no",
+   "fieldtype": "Data",
+   "label": "Số tài khoản"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_name",
+   "fieldtype": "Data",
+   "label": "Ngân hàng"
+  },
+  {
+   "fieldname": "bank_branch",
+   "fieldtype": "Data",
+   "label": "Chi nhánh"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-11-12 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Contract Tracker",
+ "name": "Contract Tracker Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Quản lý hợp đồng",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Xem hợp đồng"
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

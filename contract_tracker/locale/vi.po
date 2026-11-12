@@ -48,5 +48,14 @@ msgstr "Phiếu thu"
 msgid "Payment Receipt Allocation"
 msgstr "Phân bổ phiếu thu"
 
+msgid "Payment Request"
+msgstr "Đề nghị thanh toán"
+
+msgid "Payment Request Item"
+msgstr "Dòng đề nghị thanh toán"
+
+msgid "Contract Tracker Settings"
+msgstr "Cài đặt công ty"
+
 msgid "Your account has been locked and will resume after {0} seconds"
 msgstr "Tài khoản tạm bị khóa, vui lòng thử lại sau {0} giây"

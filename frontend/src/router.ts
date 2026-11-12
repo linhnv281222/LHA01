@@ -74,6 +74,22 @@ export const router = createRouter({
       component: () => import('./pages/contracts/ContractForm.vue'),
       props: true,
     },
+    {
+      path: '/payment-requests',
+      name: 'PaymentRequestList',
+      component: () => import('./pages/payment-requests/PaymentRequestList.vue'),
+    },
+    {
+      path: '/payment-requests/new',
+      name: 'PaymentRequestNew',
+      component: () => import('./pages/payment-requests/PaymentRequestForm.vue'),
+    },
+    {
+      path: '/payment-requests/:name/edit',
+      name: 'PaymentRequestEdit',
+      component: () => import('./pages/payment-requests/PaymentRequestForm.vue'),
+      props: true,
+    },
     { path: '/invoices', name: 'InvoiceList', component: () => import('./pages/invoices/InvoiceList.vue') },
     { path: '/invoices/new', name: 'InvoiceNew', component: () => import('./pages/invoices/InvoiceForm.vue') },
     {

@@ -10,7 +10,10 @@ from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule
 	BILLABLE_CONTRACT_STATUSES,
 	active_invoice_by_schedule,
 	paid_by_schedule,
+	request_by_schedule,
 )
+
+BANK_FIELDS = ("bank_account_holder", "bank_account_no", "bank_name", "bank_branch")
 
 
 @frappe.whitelist()
@@ -44,6 +47,7 @@ def get_billing_permissions() -> dict:
 	return {
 		"invoice_write": bool(frappe.has_permission("Sales Invoice Record", "write")),
 		"receipt_write": bool(frappe.has_permission("Payment Receipt", "write")),
+		"request_write": bool(frappe.has_permission("Payment Request", "write")),
 	}
 
 
@@ -82,6 +86,72 @@ def get_open_schedules(customer: str, exclude_invoice: str | None = None) -> lis
 	)
 	taken = active_invoice_by_schedule([r.name for r in rows], exclude_invoice=exclude_invoice)
 	return [r for r in rows if r.name not in taken]
+
+
+SCHEDULE_ROW_FIELDS = [
+	"name",
+	"schedule_name",
+	"contract",
+	"due_date",
+	"amount_before_tax",
+	"vat_rate",
+	"tax_amount",
+	"total_amount",
+]
+
+
+@frappe.whitelist()
+def get_requestable_schedules(customer: str, request: str | None = None) -> list:
+	"""Đợt còn nợ của khách hàng cho form đề nghị, kèm còn nợ và đề nghị khác đang chứa đợt (bỏ qua `request`)."""
+	frappe.has_permission("Payment Request", "read", throw=True)
+	rows = _billable_schedules(customer, SCHEDULE_ROW_FIELDS)
+	names = [r.name for r in rows]
+	paid = paid_by_schedule(names)
+	requests = request_by_schedule(names, exclude_request=request)
+	result = []
+	for r in rows:
+		outstanding = flt(r.total_amount) - paid.get(r.name, 0)
+		if outstanding > TOLERANCE:
+			r["outstanding"] = outstanding
+			r["payment_request"] = requests.get(r.name)
+			result.append(r)
+	return result
+
+
+@frappe.whitelist()
+def get_request_schedules_for_invoice(payment_request: str, customer: str, invoice: str | None = None) -> dict:
+	"""Các đợt của một đề nghị để thêm vào hóa đơn: `rows` dùng được, `skipped` đã nằm trong hóa đơn Hiệu lực khác
+	hoặc thuộc hợp đồng không xuất hóa đơn được."""
+	frappe.has_permission("Payment Request", "read", throw=True)
+	frappe.has_permission("Sales Invoice Record", "read", throw=True)
+	request = frappe.get_doc("Payment Request", payment_request)
+	if request.customer != customer:
+		frappe.throw(
+			frappe._("Đề nghị thanh toán {0} không thuộc khách hàng của hóa đơn.").format(payment_request)
+		)
+	names = [r.schedule for r in request.items]
+	rows = frappe.get_all(
+		"Payment Schedule", filters={"name": ["in", names]}, fields=SCHEDULE_ROW_FIELDS, order_by="due_date asc, name asc"
+	)
+	taken = active_invoice_by_schedule(names, exclude_invoice=invoice)
+	statuses = {
+		c: frappe.db.get_value("Contract", c, "status") for c in {r.contract for r in rows}
+	}
+	ok, skipped = [], []
+	for r in rows:
+		if r.name in taken or statuses.get(r.contract) not in BILLABLE_CONTRACT_STATUSES:
+			skipped.append(r)
+		else:
+			ok.append(r)
+	return {"rows": ok, "skipped": skipped}
+
+
+@frappe.whitelist()
+def get_payment_request_defaults() -> dict:
+	"""Thông tin tài khoản nhận tiền mặc định (từ Cài đặt công ty) cho đề nghị mới."""
+	frappe.has_permission("Payment Request", "read", throw=True)
+	settings = frappe.db.get_singles_dict("Contract Tracker Settings")
+	return {f: settings.get(f) or "" for f in BANK_FIELDS}
 
 
 @frappe.whitelist()

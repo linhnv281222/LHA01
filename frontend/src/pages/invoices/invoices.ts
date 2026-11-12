@@ -248,6 +248,27 @@ export function applySchedule(item: ItemForm, schedule: OpenSchedule | undefined
   })
 }
 
+/**
+ * Thêm các đợt của một đề nghị thanh toán vào bảng hóa đơn: bỏ đợt đã có trong bảng, thay các dòng trống,
+ * luôn kèm 1 dòng trống ở cuối. Trả về số đợt đã thêm.
+ */
+export function mergeRequestRows(items: ItemForm[], rows: OpenSchedule[], customer: string): number {
+  const have = new Set(items.filter((i) => i.schedule).map((i) => i.schedule))
+  const kept = items.filter((i) => i.schedule)
+  let added = 0
+  for (const row of rows) {
+    if (have.has(row.name)) continue
+    const item = emptyItem()
+    applySchedule(item, { ...row, customer })
+    kept.push(item)
+    have.add(row.name)
+    added++
+  }
+  ensureBlankRow(kept)
+  items.splice(0, items.length, ...kept)
+  return added
+}
+
 export const FORM_RULES: Rules<InvoiceForm> = {
   customer: { label: 'Khách hàng', required: true },
   invoice_no: { label: 'Số hóa đơn', required: true, maxLength: 140 },

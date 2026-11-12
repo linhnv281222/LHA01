@@ -6,12 +6,16 @@ from contract_tracker.api import (
 	get_billing_permissions,
 	get_contract_permissions,
 	get_open_schedules,
+	get_payment_request_defaults,
 	get_receivable_schedules,
+	get_request_schedules_for_invoice,
+	get_requestable_schedules,
 	get_responsible_users,
 	suggest_allocation,
 )
 from contract_tracker.contract_tracker.doctype.contract.test_contract import make_contract
 from contract_tracker.contract_tracker.doctype.payment_receipt.test_payment_receipt import make_receipt
+from contract_tracker.contract_tracker.doctype.payment_request.test_payment_request import make_request
 from contract_tracker.contract_tracker.doctype.sales_invoice_record.test_sales_invoice_record import (
 	make_billing_contract,
 	make_invoice,
@@ -65,6 +69,54 @@ class TestApi(IntegrationTestCase):
 		self.assertIn(advance, [r.name for r in get_open_schedules(doc.customer, exclude_invoice=invoice.name)])
 		self.assertEqual(get_open_schedules(make_contract().insert().customer), [])
 
+	def test_billing_permissions_request_write(self):
+		self.assertTrue(get_billing_permissions()["request_write"])
+		frappe.set_user(make_user("xem.quyen.dn@example.com", VIEWER))
+		self.assertFalse(get_billing_permissions()["request_write"])
+		frappe.set_user(make_user("ql.quyen.dn@example.com", MANAGER))
+		self.assertTrue(get_billing_permissions()["request_write"])
+
+	def test_requestable_schedules(self):
+		doc, advance, license_ = self._billing()
+		rows = {r.name: r for r in get_requestable_schedules(doc.customer)}
+		self.assertEqual(len(rows), 6)
+		self.assertEqual(rows[advance].outstanding, 33_000_000)
+		self.assertIsNone(rows[advance].payment_request)
+		request = make_request(doc.customer, [advance]).insert()
+		rows = {r.name: r for r in get_requestable_schedules(doc.customer)}
+		self.assertEqual(rows[advance].payment_request, request.name)
+		rows = {r.name: r for r in get_requestable_schedules(doc.customer, request=request.name)}
+		self.assertIsNone(rows[advance].payment_request)
+		make_receipt(doc.customer, 33_000_000, [(advance, 33_000_000)]).insert()
+		self.assertNotIn(advance, [r.name for r in get_requestable_schedules(doc.customer)])
+
+	def test_payment_request_defaults(self):
+		settings = frappe.get_single("Contract Tracker Settings")
+		settings.update(
+			{"bank_account_holder": "LHA", "bank_account_no": "999", "bank_name": "BIDV", "bank_branch": "HCM"}
+		)
+		settings.save()
+		frappe.set_user(make_user("xem.mac.dinh@example.com", VIEWER))
+		self.assertEqual(
+			get_payment_request_defaults(),
+			{"bank_account_holder": "LHA", "bank_account_no": "999", "bank_name": "BIDV", "bank_branch": "HCM"},
+		)
+
+	def test_request_schedules_for_invoice(self):
+		doc, advance, license_ = self._billing()
+		request = make_request(doc.customer, [advance, license_]).insert()
+		result = get_request_schedules_for_invoice(request.name, doc.customer)
+		self.assertEqual({r.name for r in result["rows"]}, {advance, license_})
+		self.assertEqual(result["skipped"], [])
+		invoice = make_invoice(doc.customer, [license_]).insert()
+		result = get_request_schedules_for_invoice(request.name, doc.customer)
+		self.assertEqual([r.name for r in result["rows"]], [advance])
+		self.assertEqual([r.name for r in result["skipped"]], [license_])
+		result = get_request_schedules_for_invoice(request.name, doc.customer, invoice=invoice.name)
+		self.assertEqual(len(result["rows"]), 2)
+		with self.assertRaises(frappe.ValidationError):
+			get_request_schedules_for_invoice(request.name, make_contract().insert().customer)
+
 	def test_suggest_allocation_example(self):
 		doc, advance, license_ = self._billing()
 		rows = suggest_allocation(doc.customer, 40_000_000)
@@ -90,9 +142,13 @@ class TestApi(IntegrationTestCase):
 		self.assertEqual([r.name for r in get_receivable_schedules(doc.customer)].count(advance), 0)
 
 	def test_billing_permissions(self):
-		self.assertEqual(get_billing_permissions(), {"invoice_write": True, "receipt_write": True})
+		self.assertEqual(
+			get_billing_permissions(), {"invoice_write": True, "receipt_write": True, "request_write": True}
+		)
 		frappe.set_user(make_user("quyen.xem.thu@example.com", VIEWER))
-		self.assertEqual(get_billing_permissions(), {"invoice_write": False, "receipt_write": False})
+		self.assertEqual(
+			get_billing_permissions(), {"invoice_write": False, "receipt_write": False, "request_write": False}
+		)
 		self.assertEqual(get_open_schedules("khong-co"), [])
 
 	def test_get_contract_permissions_by_role(self):
