@@ -7,3 +7,4 @@ contract_tracker.patches.v0_1.create_contract_roles
 # Patches added in this section will be executed after doctypes are migrated
 contract_tracker.patches.v0_1.create_initial_vat_rates
 contract_tracker.patches.v0_1.fill_schedule_responsible_user
+contract_tracker.patches.v0_1.create_payment_request_print_format

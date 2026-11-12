@@ -102,7 +102,7 @@ website_route_rules = [
 # ------------
 
 before_install = "contract_tracker.setup.ensure_roles"
-after_install = "contract_tracker.setup.ensure_vat_rates"
+after_install = ["contract_tracker.setup.ensure_vat_rates", "contract_tracker.setup.ensure_print_formats"]
 
 # Uninstallation
 # ------------

@@ -64,6 +64,26 @@ def active_invoice_by_schedule(names, exclude_invoice=None) -> dict:
 	return {schedule: (name, no) for schedule, name, no in query.run()}
 
 
+def request_by_schedule(names, exclude_request=None) -> dict:
+	"""{đợt: mã đề nghị thanh toán} của các đề nghị (Nháp hoặc Đã gửi) đang chứa đợt."""
+	names = [n for n in names if n]
+	if not names:
+		return {}
+	item = frappe.qb.DocType("Payment Request Item")
+	req = frappe.qb.DocType("Payment Request")
+	query = (
+		frappe.qb.from_(item)
+		.join(req)
+		.on(item.parent == req.name)
+		.select(item.schedule, req.name)
+		.where(item.schedule.isin(names))
+		.where(item.parenttype == "Payment Request")
+	)
+	if exclude_request:
+		query = query.where(req.name != exclude_request)
+	return {schedule: name for schedule, name in query.run()}
+
+
 def paid_by_schedule(names, exclude_receipt=None) -> dict:
 	"""{đợt: tổng tiền đã phân bổ từ các phiếu thu}."""
 	names = [n for n in names if n]
@@ -107,7 +127,7 @@ def compute_schedule_state(total, paid, due_date, invoice_no) -> dict:
 	}
 
 
-def refresh_schedules(names, exclude_receipt=None):
+def refresh_schedules(names, exclude_receipt=None, exclude_request=None):
 	"""Tính lại trạng thái các đợt từ toàn bộ hóa đơn Hiệu lực và phiếu thu, rồi số tổng của hợp đồng.
 
 	Ghi bằng db.set_value để không chạy save Đợt thu/Hợp đồng (hợp đồng Hết hạn, Đã thanh lý bị khóa sửa).
@@ -123,10 +143,12 @@ def refresh_schedules(names, exclude_receipt=None):
 	found = [r.name for r in rows]
 	invoices = active_invoice_by_schedule(found)
 	paid = paid_by_schedule(found, exclude_receipt)
+	requests = request_by_schedule(found, exclude_request)
 	contracts = set()
 	for row in rows:
 		invoice_no = invoices.get(row.name, (None, None))[1]
 		state = compute_schedule_state(row.total_amount, paid.get(row.name, 0), row.due_date, invoice_no)
+		state["request_status"] = "Đã lập" if row.name in requests else "Chưa lập"
 		frappe.db.set_value("Payment Schedule", row.name, state, update_modified=False)
 		contracts.add(row.contract)
 	for contract in contracts:

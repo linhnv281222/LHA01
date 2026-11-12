@@ -1,7 +1,14 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from contract_tracker.setup import INITIAL_VAT_RATES, ROLES, ensure_roles, ensure_vat_rates
+from contract_tracker.setup import (
+	INITIAL_VAT_RATES,
+	PAYMENT_REQUEST_PRINT_FORMAT,
+	ROLES,
+	ensure_print_formats,
+	ensure_roles,
+	ensure_vat_rates,
+)
 
 VIEWER = "Xem hợp đồng"
 MANAGER = "Quản lý hợp đồng"
@@ -32,6 +39,43 @@ class TestSetup(IntegrationTestCase):
 		ensure_roles()
 		for role in ROLES:
 			self.assertEqual(frappe.db.count("Role", {"name": role}), 1)
+
+	def test_ensure_print_formats(self):
+		ensure_print_formats()
+		ensure_print_formats()
+		self.assertEqual(frappe.db.count("Print Format", {"name": PAYMENT_REQUEST_PRINT_FORMAT}), 1)
+		pf = frappe.get_doc("Print Format", PAYMENT_REQUEST_PRINT_FORMAT)
+		self.assertEqual(pf.doc_type, "Payment Request")
+		self.assertEqual(pf.standard, "No")
+		self.assertEqual(pf.print_format_type, "Jinja")
+		for text in ("ĐỀ NGHỊ THANH TOÁN", "amount_in_words", "bank_account_no", "Chữ ký", "doc.items"):
+			self.assertIn(text, pf.html)
+		self.assertEqual(
+			frappe.db.get_value(
+				"Property Setter",
+				{"doc_type": "Payment Request", "property": "default_print_format"},
+				"value",
+			),
+			PAYMENT_REQUEST_PRINT_FORMAT,
+		)
+
+	def test_ensure_print_formats_keeps_edits(self):
+		ensure_print_formats()
+		frappe.db.set_value("Print Format", PAYMENT_REQUEST_PRINT_FORMAT, "html", "<p>MẪU ĐÃ SỬA {{ doc.name }}</p>")
+		ensure_print_formats()
+		self.assertEqual(
+			frappe.db.get_value("Print Format", PAYMENT_REQUEST_PRINT_FORMAT, "html"), "<p>MẪU ĐÃ SỬA {{ doc.name }}</p>"
+		)
+		from contract_tracker.contract_tracker.doctype.payment_request.test_payment_request import make_request
+		from contract_tracker.contract_tracker.doctype.sales_invoice_record.test_sales_invoice_record import (
+			make_billing_contract,
+			schedule_of,
+		)
+
+		contract = make_billing_contract()
+		doc = make_request(contract.customer, [schedule_of(contract.name, "Tạm ứng")]).insert()
+		html = frappe.get_print("Payment Request", doc.name, print_format=PAYMENT_REQUEST_PRINT_FORMAT)
+		self.assertIn("MẪU ĐÃ SỬA " + doc.name, html)
 
 	def test_initial_vat_rates_idempotent(self):
 		ensure_vat_rates()

@@ -89,7 +89,7 @@ watch(
 const customers = useList<ContractCustomer>({ doctype: 'Contract Customer', fields: ['name', 'customer_name'], orderBy: 'customer_name asc', limit: 5000 })
 const contracts = useList<{ name: string }>({ doctype: 'Contract', fields: ['name'], orderBy: 'name asc', limit: 5000 })
 const users = useCall<{ name: string; full_name: string }[]>({ url: '/api/v2/method/contract_tracker.api.get_responsible_users' })
-const perms = useCall<{ invoice_write: boolean; receipt_write: boolean }>({ url: '/api/v2/method/contract_tracker.api.get_billing_permissions' })
+const perms = useCall<{ invoice_write: boolean; receipt_write: boolean; request_write: boolean }>({ url: '/api/v2/method/contract_tracker.api.get_billing_permissions' })
 const userList = computed(() => (Array.isArray(users.data) ? users.data : []))
 const customerOptions = computed<SelectOption[]>(() => (customers.data ?? []).map((c) => ({ label: c.customer_name, value: c.name })))
 const contractOptions = computed<SelectOption[]>(() => (contracts.data ?? []).map((c) => ({ label: c.name, value: c.name })))
@@ -125,14 +125,21 @@ function onPick(row: ScheduleListRow) {
   picked.value = togglePick(picked.value, row, pickedRows.value)
 }
 const state = computed(() => actionState(pickedRows.value))
-const perm = computed(() => ({ invoice: perms.data?.invoice_write === true, receipt: perms.data?.receipt_write === true }))
+const perm = computed(() => ({
+  invoice: perms.data?.invoice_write === true,
+  receipt: perms.data?.receipt_write === true,
+  request: perms.data?.request_write === true,
+}))
 const blockedReason = computed(() => {
   if (!pickedRows.value.length) return ''
-  return [perm.value.invoice ? state.value.invoice.reason : '', perm.value.receipt ? state.value.receipt.reason : '']
-    .filter(Boolean)
-    .join(' ')
+  const reasons = [
+    perm.value.request ? state.value.request.reason : '',
+    perm.value.invoice ? state.value.invoice.reason : '',
+    perm.value.receipt ? state.value.receipt.reason : '',
+  ].filter(Boolean)
+  return [...new Set(reasons)].join(' ')
 })
-function record(kind: 'invoices' | 'receipts') {
+function record(kind: 'invoices' | 'receipts' | 'payment-requests') {
   void router.push({ path: `/${kind}/new`, query: { schedules: toScheduleQuery(pickedRows.value.map((r) => r.name)) } })
 }
 
@@ -190,6 +197,16 @@ function exportExcel() {
     <PageTitle title="Lịch thu tiền" :count="tableRows.length">
       <template #actions>
         <Button size="md" variant="outline" icon-left="lucide-file-spreadsheet" label="Xuất Excel" @click="exportExcel" />
+        <Button
+          v-if="perm.request"
+          size="md"
+          variant="outline"
+          icon-left="lucide-file-check"
+          label="Lập đề nghị thanh toán"
+          :disabled="!state.request.enabled"
+          :title="state.request.reason"
+          @click="record('payment-requests')"
+        />
         <Button
           v-if="perm.invoice"
           size="md"

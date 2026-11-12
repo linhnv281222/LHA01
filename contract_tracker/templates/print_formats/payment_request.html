@@ -1,0 +1,81 @@
+{%- set customer = frappe.db.get_value("Contract Customer", doc.customer, ["customer_name", "tax_code", "address"], as_dict=True) or {} -%}
+<style>
+	.dntt { font-size: 13px; line-height: 1.5; }
+	.dntt h2 { text-align: center; margin: 0 0 4px; }
+	.dntt .center { text-align: center; }
+	.dntt .parties { width: 100%; margin: 16px 0; }
+	.dntt .parties td { width: 50%; vertical-align: top; padding: 4px 8px; }
+	.dntt table.items { width: 100%; border-collapse: collapse; margin-top: 8px; }
+	.dntt table.items th, .dntt table.items td { border: 1px solid #333; padding: 4px 6px; }
+	.dntt .num { text-align: right; }
+	.dntt .sign { width: 100%; margin-top: 32px; text-align: center; }
+	.dntt .sign td { width: 50%; padding-bottom: 80px; }
+</style>
+<div class="dntt">
+	<h2>ĐỀ NGHỊ THANH TOÁN</h2>
+	<p class="center">Số: {{ doc.name }}<br>Ngày lập: {{ doc.get_formatted("request_date") }} &nbsp;|&nbsp; Hạn thanh toán: {{ doc.get_formatted("due_date") }}</p>
+
+	<table class="parties">
+		<tr>
+			<td>
+				<b>Bên đề nghị (LHA)</b><br>
+				Tên đơn vị: ………………………………<br>
+				Địa chỉ: ………………………………<br>
+				Mã số thuế: ………………………………
+			</td>
+			<td>
+				<b>Bên được đề nghị (Khách hàng)</b><br>
+				Tên đơn vị: {{ doc.customer_name or customer.get("customer_name") or "" }}<br>
+				Địa chỉ: {{ customer.get("address") or "" }}<br>
+				Mã số thuế: {{ customer.get("tax_code") or "" }}
+			</td>
+		</tr>
+	</table>
+
+	<p>Bên đề nghị kính đề nghị Quý khách hàng thanh toán các khoản sau:</p>
+	<table class="items">
+		<thead>
+			<tr>
+				<th>STT</th>
+				<th>Nội dung</th>
+				<th class="num">Trước thuế (VND)</th>
+				<th class="num">Tiền thuế (VND)</th>
+				<th class="num">Tổng tiền (VND)</th>
+			</tr>
+		</thead>
+		<tbody>
+			{%- for row in doc.items %}
+			<tr>
+				<td class="center">{{ loop.index }}</td>
+				<td>{{ row.schedule_name }}{% if row.contract %} ({{ row.contract }}){% endif %}</td>
+				<td class="num">{{ row.get_formatted("amount_before_tax") }}</td>
+				<td class="num">{{ row.get_formatted("tax_amount") }}</td>
+				<td class="num">{{ row.get_formatted("total_amount") }}</td>
+			</tr>
+			{%- endfor %}
+			<tr>
+				<td colspan="2"><b>Tổng cộng</b></td>
+				<td class="num"><b>{{ doc.get_formatted("total_before_tax") }}</b></td>
+				<td class="num"><b>{{ doc.get_formatted("total_tax") }}</b></td>
+				<td class="num"><b>{{ doc.get_formatted("grand_total") }}</b></td>
+			</tr>
+		</tbody>
+	</table>
+
+	<p><b>Số tiền bằng chữ:</b> <i>{{ doc.amount_in_words or "" }}</i></p>
+
+	<p>
+		<b>Thông tin tài khoản nhận tiền</b><br>
+		Chủ tài khoản: {{ doc.bank_account_holder or "" }}<br>
+		Số tài khoản: {{ doc.bank_account_no or "" }}<br>
+		Ngân hàng: {{ doc.bank_name or "" }}{% if doc.bank_branch %} - Chi nhánh {{ doc.bank_branch }}{% endif %}
+	</p>
+	{% if doc.notes %}<p><b>Ghi chú:</b> {{ doc.notes }}</p>{% endif %}
+
+	<table class="sign">
+		<tr>
+			<td><b>Bên đề nghị</b><br><i>(Ký, ghi rõ họ tên) - Chữ ký</i></td>
+			<td><b>Bên được đề nghị</b><br><i>(Ký, ghi rõ họ tên) - Chữ ký</i></td>
+		</tr>
+	</table>
+</div>

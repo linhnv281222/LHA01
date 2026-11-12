@@ -16,6 +16,40 @@ INITIAL_VAT_RATES = [
 ]
 
 
+PAYMENT_REQUEST_PRINT_FORMAT = "Đề nghị thanh toán"
+PAYMENT_REQUEST_TEMPLATE = "templates/print_formats/payment_request.html"
+
+
+def ensure_print_formats():
+	"""Tạo Print Format "Đề nghị thanh toán" một lần. Không ghi đè nếu đã có, để người dùng sửa trên Desk.
+
+	Dùng standard="No": Frappe chặn sửa Print Format chuẩn khi không bật developer mode và migrate sẽ ghi đè.
+	"""
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+	if not frappe.db.exists("Print Format", PAYMENT_REQUEST_PRINT_FORMAT):
+		with open(frappe.get_app_path("contract_tracker", PAYMENT_REQUEST_TEMPLATE), encoding="utf-8") as f:
+			html = f.read()
+		frappe.get_doc(
+			{
+				"doctype": "Print Format",
+				"name": PAYMENT_REQUEST_PRINT_FORMAT,
+				"doc_type": "Payment Request",
+				"module": "Contract Tracker",
+				"print_format_type": "Jinja",
+				"custom_format": 1,
+				"standard": "No",
+				"html": html,
+			}
+		).insert(ignore_permissions=True)
+	if not frappe.db.exists(
+		"Property Setter", {"doc_type": "Payment Request", "property": "default_print_format"}
+	):
+		make_property_setter(
+			"Payment Request", None, "default_print_format", PAYMENT_REQUEST_PRINT_FORMAT, "Data"
+		)
+
+
 def ensure_roles():
 	for name in ROLES:
 		if not frappe.db.exists("Role", name):

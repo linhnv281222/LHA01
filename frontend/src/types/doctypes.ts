@@ -163,6 +163,24 @@ export interface ContractMilestone {
   milestone_amount?: number | null
 }
 
+/** DocType "Contract Tracker Settings" (contract_tracker/contract_tracker/doctype/contract_tracker_settings/contract_tracker_settings.json) */
+export interface ContractTrackerSettings {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  /** Chủ tài khoản */
+  bank_account_holder?: string | null
+  /** Số tài khoản */
+  bank_account_no?: string | null
+  /** Ngân hàng */
+  bank_name?: string | null
+  /** Chi nhánh */
+  bank_branch?: string | null
+}
+
 /** DocType "Contract Type" (contract_tracker/contract_tracker/doctype/contract_type/contract_type.json) */
 export interface ContractType {
   name: string
@@ -235,6 +253,78 @@ export interface PaymentReceiptAllocation {
   total_amount?: number | null
   /** Còn nợ (VND) */
   outstanding_amount?: number | null
+}
+
+/** DocType "Payment Request" (contract_tracker/contract_tracker/doctype/payment_request/payment_request.json) */
+export interface PaymentRequest {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  /** Khách hàng */
+  customer: string
+  /** Tên khách hàng */
+  customer_name?: string | null
+  /** Ngày lập */
+  request_date: string
+  /** Hạn thanh toán */
+  due_date: string
+  /** Trạng thái */
+  status?: "Nh\u00e1p" | "\u0110\u00e3 g\u1eedi" | null
+  /** Ghi chú */
+  notes?: string | null
+  /** Các đợt thu */
+  items: PaymentRequestItem[]
+  /** Tổng trước thuế (VND) */
+  total_before_tax?: number | null
+  /** Tổng thuế (VND) */
+  total_tax?: number | null
+  /** Tổng cộng (VND) */
+  grand_total?: number | null
+  /** Số tiền bằng chữ */
+  amount_in_words?: string | null
+  /** Chủ tài khoản */
+  bank_account_holder?: string | null
+  /** Số tài khoản */
+  bank_account_no?: string | null
+  /** Ngân hàng */
+  bank_name?: string | null
+  /** Chi nhánh */
+  bank_branch?: string | null
+}
+
+/** DocType "Payment Request Item" (contract_tracker/contract_tracker/doctype/payment_request_item/payment_request_item.json) */
+export interface PaymentRequestItem {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  parent?: string
+  parentfield?: string
+  parenttype?: string
+  idx?: number
+  /** Đợt thu */
+  schedule: string
+  /** Hợp đồng */
+  contract?: string | null
+  /** Nội dung */
+  schedule_name?: string | null
+  /** Ngày đến hạn */
+  due_date?: string | null
+  /** Trước thuế (VND) */
+  amount_before_tax?: number | null
+  /** Thuế suất */
+  vat_rate?: string | null
+  /** Tiền thuế (VND) */
+  tax_amount?: number | null
+  /** Tổng tiền (VND) */
+  total_amount?: number | null
+  /** Còn nợ (VND) */
+  outstanding?: number | null
 }
 
 /** DocType "Payment Schedule" (contract_tracker/contract_tracker/doctype/payment_schedule/payment_schedule.json) */

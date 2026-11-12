@@ -251,6 +251,15 @@ describe('chọn nhiều đợt', () => {
     expect(s.receipt.enabled).toBe(false)
     expect(s.receipt.reason).toBe(MSG_PAID.replace('{0}', 'Đợt P'))
   })
+  it('nút lập đề nghị: khóa khi chưa chọn, khóa khi có đợt đã thu đủ, đợt Đã lập vẫn mở', () => {
+    expect(actionState([]).request).toEqual({ enabled: false, reason: MSG_NO_SELECTION })
+    const paid = row('p', { schedule_name: 'Đợt P', payment_status: 'Đã thu', paid_amount: 110 })
+    const s = actionState([a1, paid])
+    expect(s.request.enabled).toBe(false)
+    expect(s.request.reason).toBe(MSG_PAID.replace('{0}', 'Đợt P'))
+    const listed = row('l', { request_status: 'Đã lập', invoice_status: 'Đã xuất' })
+    expect(actionState([a1, listed]).request).toEqual({ enabled: true, reason: '' })
+  })
   it('đường dẫn ?schedules= ghi và đọc lại, bỏ phần rỗng và trùng', () => {
     expect(toScheduleQuery(['DT-1', 'DT-2'])).toBe('DT-1,DT-2')
     expect(parseScheduleQuery('DT-1,,DT-2, DT-1')).toEqual(['DT-1', 'DT-2'])

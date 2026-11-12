@@ -17,6 +17,7 @@ import {
   fromDoc,
   groupTree,
   isLocked,
+  mergeRequestRows,
   prefillItems,
   statCards,
   statusOf,
@@ -188,6 +189,22 @@ describe('chuyển dữ liệu', () => {
     expect(form.items[0].schedule).toBe('DT-1')
     expect(form.items[1].schedule).toBe('')
     expect(form.invoice_series).toBe('')
+  })
+})
+
+describe('mergeRequestRows (lấy từ đề nghị thanh toán)', () => {
+  it('thêm đợt chưa có, thay dòng trống, giữ 1 dòng trống cuối', () => {
+    const items = [rowOf(ADVANCE), emptyForm().items[0]]
+    const added = mergeRequestRows(items, [ADVANCE, LICENSE], 'KH-1')
+    expect(added).toBe(1)
+    expect(items.map((i) => i.schedule)).toEqual(['DT-1', 'DT-2', ''])
+    expect(items[1].total_amount).toBe(15_000_000)
+    expect(items[1].customer).toBe('KH-1')
+  })
+  it('không có đợt nào thì vẫn chỉ còn một dòng trống', () => {
+    const items: ItemForm[] = []
+    expect(mergeRequestRows(items, [], 'KH-1')).toBe(0)
+    expect(items.map((i) => i.schedule)).toEqual([''])
   })
 })
 
