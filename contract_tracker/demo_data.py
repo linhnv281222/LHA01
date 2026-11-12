@@ -22,6 +22,7 @@ from contract_tracker.contract_tracker.doctype.contract.contract import (
 from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import (
 	has_documents,
 	minutes_by_schedule,
+	refresh_schedules,
 )
 from contract_tracker.setup import ensure_vat_rates
 
@@ -341,16 +342,10 @@ def _ensure_customers(created):
 
 
 def _ensure_contract_types(created):
-	real = frappe.get_all(
-		"Contract Type",
-		filters={"is_active": 1, "code": ["not like", f"{TYPE_CODE_PREFIX}%"]},
-		pluck="name",
-		order_by="name asc",
-		limit_page_length=TYPE_COUNT,
-	)
-	sample = frappe.get_all(
-		"Contract Type", filters={"code": ["like", f"{TYPE_CODE_PREFIX}%"]}, pluck="name", order_by="name asc"
-	)
+	# Lọc bằng Python: trong SQL LIKE, "_" khớp mọi ký tự nên sẽ bắt nhầm loại thật như MAUA1.
+	rows = frappe.get_all("Contract Type", fields=["name", "code", "is_active"], order_by="name asc")
+	real = [r.name for r in rows if r.is_active and not r.code.startswith(TYPE_CODE_PREFIX)][:TYPE_COUNT]
+	sample = [r.name for r in rows if r.code.startswith(TYPE_CODE_PREFIX)]
 	types = (real + sample)[:TYPE_COUNT]
 	n = 1
 	while len(types) < TYPE_COUNT:
@@ -602,6 +597,9 @@ def clear():
 				skipped[parent] += 1
 				blocked |= used & mine
 
+	if blocked:
+		# Chứng từ mẫu cùng đợt đã bị xóa: tính lại trạng thái các đợt còn giữ.
+		refresh_schedules(list(blocked))
 	blocked_contracts = {r.contract for r in schedules if r.name in blocked}
 	for r in schedules:
 		if r.contract not in blocked_contracts:
@@ -615,13 +613,17 @@ def clear():
 			deleted["Contract"] += 1
 
 	_delete_unused("Contract Customer", {"tax_code": ["like", f"{CUSTOMER_TAX_PREFIX}%"]}, deleted, skipped)
-	_delete_unused("Contract Type", {"code": ["like", f"{TYPE_CODE_PREFIX}%"]}, deleted, skipped)
+	_delete_unused("Contract Type", {"code": ["like", "MAU%"]}, deleted, skipped, prefix=TYPE_CODE_PREFIX)
 	return _report("deleted", deleted, skipped)
 
 
-def _delete_unused(doctype, filters, deleted, skipped):
+def _delete_unused(doctype, filters, deleted, skipped, prefix=None):
 	"""Không dùng force: bản ghi còn nơi dùng thì LinkExistsError và được giữ lại."""
-	for name in frappe.get_all(doctype, filters=filters, pluck="name"):
+	fieldname = next(iter(filters))
+	for row in frappe.get_all(doctype, filters=filters, fields=["name", fieldname]):
+		name = row.name
+		if prefix and not (row.get(fieldname) or "").startswith(prefix):
+			continue  # LIKE chỉ lọc thô ("_" khớp mọi ký tự); kiểm lại tiền tố chính xác bằng Python
 		frappe.db.savepoint("demo_clear")
 		try:
 			frappe.delete_doc(doctype, name, ignore_permissions=True)

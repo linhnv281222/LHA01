@@ -97,10 +97,20 @@ class TestDemoDataSeed(IntegrationTestCase):
 		self.assertIn("Chưa xuất", {s.invoice_status for s in schedules})
 		self.assertIn("Đã xuất", {s.invoice_status for s in schedules})
 		self.assertIn("Đã lập", {s.request_status for s in schedules})
-		self.assertTrue(frappe.db.count("Sales Invoice Record"))
-		self.assertTrue(frappe.db.count("Payment Receipt"))
-		self.assertTrue(frappe.db.count("Payment Request", {"status": "Đã gửi"}))
-		self.assertTrue(frappe.db.count("Payment Request", {"status": "Nháp"}))
+		names = frappe.get_all("Payment Schedule", filters={"contract": ["in", _sample_names()]}, pluck="name")
+
+		def parents(child, parent, status=None):
+			found = set(frappe.get_all(child, filters={"schedule": ["in", names]}, pluck="parent"))
+			if status and found:
+				found = set(
+					frappe.get_all(parent, filters={"name": ["in", list(found)], "status": status}, pluck="name")
+				)
+			return found
+
+		self.assertTrue(parents("Sales Invoice Record Item", "Sales Invoice Record"))
+		self.assertTrue(parents("Payment Receipt Allocation", "Payment Receipt"))
+		self.assertTrue(parents("Payment Request Item", "Payment Request", "Đã gửi"))
+		self.assertTrue(parents("Payment Request Item", "Payment Request", "Nháp"))
 
 	def test_liquidated(self):
 		for spec in (s for s in CONTRACTS if s["status"] == "liquidated"):
@@ -142,6 +152,8 @@ class TestDemoDataClear(IntegrationTestCase):
 		real = make_billing_contract()
 		schedule = frappe.get_all("Payment Schedule", filters={"contract": real.name}, pluck="name")[0]
 		invoice = make_invoice(real.customer, [schedule]).insert()
+		# Loại thật có mã giống tiền tố mẫu nếu "_" bị hiểu là ký tự đại diện của LIKE.
+		lookalike = frappe.get_doc({"doctype": "Contract Type", "code": "MAUX1", "type_name": "Loại thật MAUX1"}).insert()
 		real_types = frappe.get_all("Contract Type", pluck="name")
 		real_customers = frappe.get_all("Contract Customer", pluck="name")
 		base = _count()
@@ -156,9 +168,10 @@ class TestDemoDataClear(IntegrationTestCase):
 		self.assertEqual(_sample_names(), [])
 		self.assertEqual(frappe.db.count("Payment Schedule", {"contract": ["like", "MAU-%"]}), 0)
 		self.assertEqual(frappe.db.count("Contract Customer", {"tax_code": ["like", "MAU-KH-%"]}), 0)
-		self.assertEqual(frappe.db.count("Contract Type", {"code": ["like", "MAU_%"]}), 0)
+		self.assertEqual([c for c in frappe.get_all("Contract Type", pluck="code") if c.startswith("MAU_")], [])
 		# Mọi loại bản ghi về đúng số lượng trước khi nạp: dữ liệu thật còn nguyên.
 		self.assertEqual(_count(), base)
+		self.assertTrue(frappe.db.exists("Contract Type", lookalike.name))
 		self.assertTrue(frappe.db.exists("Contract", real.name))
 		self.assertTrue(frappe.db.exists("Sales Invoice Record", invoice.name))
 		for name in real_types:
