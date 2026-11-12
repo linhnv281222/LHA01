@@ -26,7 +26,9 @@ import { todayStr } from '@/pages/payment-schedules/paymentSchedule'
 import {
   COLUMNS,
   DOCTYPE,
+  SCHEDULE_LIMIT,
   SCHEDULE_LIST_FIELDS,
+  asideCards,
   collectedPercent,
   detailFields,
   detailTitle,
@@ -40,12 +42,14 @@ import {
   nextDueDate,
   nextDueText,
   normalizeGroups,
+  overdueScheduleFilters,
   partyLines,
   periodBadge,
   remainingText,
   statCards,
   statusOf,
   toFrappeFilters,
+  usableSchedules,
   type Contract,
   type ContractItem,
   type ContractSchedule,
@@ -112,18 +116,20 @@ watch(
   },
 )
 
-// Lịch thu của các hợp đồng đang hiển thị (lọc ở server). Lỗi không làm hỏng bảng chính.
-const schedules = useList<ContractSchedule & { name: string }>({
+// "Hôm nay" tính một lần khi mở trang.
+const today = todayStr()
+
+// Đợt quá hạn: lọc ở server (đến hạn trước hôm nay, chưa thu đủ), không dùng IN theo tên hợp đồng.
+// Lỗi hay chạm giới hạn thì không tính (thẻ hiện "Không có"); bảng chính vẫn dùng được.
+const overdue = useList<ContractSchedule & { name: string }>({
   doctype: 'Payment Schedule',
   fields: SCHEDULE_LIST_FIELDS,
-  filters: () => ({ contract: ['in', rows.value.length ? rows.value.map((r) => r.name) : ['']] }),
-  limit: 5000,
+  filters: overdueScheduleFilters(today),
+  limit: SCHEDULE_LIMIT,
 })
-const scheduleRows = computed<ContractSchedule[] | null>(() =>
-  schedules.error || schedules.loading ? null : (schedules.data ?? []),
-)
-const today = computed(() => todayStr())
-const cards = computed<StatCard[]>(() => statCards(rows.value, scheduleRows.value, today.value))
+const overdueRows = computed(() => usableSchedules(overdue.data, !!overdue.error, overdue.loading))
+const overdueTruncated = computed(() => !overdue.error && !overdue.loading && (overdue.data?.length ?? 0) >= SCHEDULE_LIMIT)
+const cards = computed<StatCard[]>(() => statCards(rows.value, overdueRows.value, today))
 
 function search() {
   applied.value = JSON.parse(JSON.stringify(draft.value)) as PanelFilters
@@ -140,6 +146,14 @@ watch(selected, (v) => {
 })
 const current = computed(() => rows.value.find((r) => r.name === selected.value) ?? null)
 
+// Lịch thu chỉ của hợp đồng đang chọn (đợt thu của hạng mục, đợt kế tiếp).
+const schedules = useList<ContractSchedule & { name: string }>({
+  doctype: 'Payment Schedule',
+  fields: SCHEDULE_LIST_FIELDS,
+  filters: () => ({ contract: selected.value ?? '' }),
+  limit: 500,
+})
+
 // useList không trả bảng con nên các hạng mục lấy từ chính hợp đồng đang chọn.
 const detail = useDoc<Contract>({ doctype: DOCTYPE, name: () => selected.value ?? '', immediate: false })
 watch(selected, (v) => v && void detail.reload(), { immediate: true })
@@ -147,9 +161,15 @@ const detailItems = computed<ContractItem[]>(() => (detail.doc?.name === selecte
 
 const fields = computed<DetailField[]>(() => (current.value ? detailFields(current.value) : []))
 const currentSchedules = computed<ContractSchedule[] | null>(() =>
-  scheduleRows.value ? scheduleRows.value.filter((s) => s.contract === selected.value) : null,
+  schedules.error || schedules.loading ? null : (schedules.data ?? []).filter((s) => s.contract === selected.value),
 )
-const nextDue = computed(() => (currentSchedules.value ? nextDueText(nextDueDate(currentSchedules.value, today.value)) : 'Không có'))
+const LOADING = 'Đang tải…'
+const nextDue = computed(() =>
+  currentSchedules.value ? nextDueText(nextDueDate(currentSchedules.value, today)) : schedules.loading ? LOADING : 'Không có',
+)
+const installmentOf = (item: ContractItem) =>
+  schedules.loading ? LOADING : installmentText(item.item_key, currentSchedules.value)
+const asideCardList = computed<StatCard[]>(() => (current.value ? asideCards(current.value, nextDue.value) : []))
 const itemTotalsRow = computed(() => {
   const t = itemTotals(detailItems.value)
   return {
@@ -206,8 +226,15 @@ function exportExcel() {
       <button type="button" class="ml-2 underline" @click="list.reload()">Thử lại</button>
     </p>
 
+    <p v-if="overdue.error" class="rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-base text-ink-red-7" role="alert">
+      Không tải được lịch thu: {{ overdue.error.message }}
+      <button type="button" class="ml-2 underline" @click="overdue.reload()">Thử lại</button>
+    </p>
+    <p v-else-if="overdueTruncated" class="rounded-4 border border-outline-amber-3 bg-surface-amber-2 px-3 py-2 text-base text-ink-amber-7" role="alert">
+      Có quá nhiều đợt quá hạn nên chưa tính được số đợt quá hạn. Hãy lọc bớt hợp đồng rồi thử lại.
+    </p>
     <p v-if="schedules.error" class="rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-base text-ink-red-7" role="alert">
-      Không tải được lịch thu: {{ schedules.error.message }}
+      Không tải được lịch thu của hợp đồng đang chọn: {{ schedules.error.message }}
       <button type="button" class="ml-2 underline" @click="schedules.reload()">Thử lại</button>
     </p>
 
@@ -274,40 +301,7 @@ function exportExcel() {
         <StatusBadge :status="statusOf(current)" />
       </template>
       <template #aside>
-        <dl class="space-y-3">
-          <div>
-            <dt class="text-sm text-ink-gray-5">Tổng sau thuế (VND)</dt>
-            <dd class="text-lg-semibold tabular-nums text-ink-gray-9">{{ formatCurrency(current.total_after_tax) }}</dd>
-            <dd class="text-sm text-ink-gray-5">Tiền thuế: {{ formatCurrency(current.total_tax) }}</dd>
-          </div>
-          <div>
-            <dt class="text-sm text-ink-gray-5">Đã thu (VND)</dt>
-            <dd class="text-lg-semibold tabular-nums text-ink-green-7">{{ formatCurrency(current.paid_amount) }}</dd>
-          </div>
-          <div>
-            <dt class="text-sm text-ink-gray-5">Còn phải thu (VND)</dt>
-            <dd class="text-lg-semibold tabular-nums text-ink-amber-7">{{ formatCurrency(current.outstanding_amount) }}</dd>
-            <dd class="text-sm" :class="nextDue === 'Không có' ? 'text-ink-gray-4' : 'text-ink-gray-5'">
-              Đến hạn đợt kế tiếp: {{ nextDue }}
-            </dd>
-          </div>
-          <div>
-            <div
-              class="h-1.5 overflow-hidden rounded-full bg-surface-gray-3"
-              role="progressbar"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              :aria-valuenow="collectedPercent(current.paid_amount, current.total_after_tax)"
-              aria-label="Tiến độ thu"
-            >
-              <div
-                class="h-full rounded-full bg-surface-green-5"
-                :style="{ width: `${collectedPercent(current.paid_amount, current.total_after_tax)}%` }"
-              />
-            </div>
-            <p class="mt-1 text-sm text-ink-gray-5">Đã thu {{ collectedPercent(current.paid_amount, current.total_after_tax) }}%</p>
-          </div>
-        </dl>
+        <StatCards :cards="asideCardList" />
       </template>
       <template #actions>
         <Button
@@ -333,7 +327,7 @@ function exportExcel() {
             <StatusBadge v-if="badgeOf(row)" :status="{ label: badgeOf(row) as string, icon: 'lucide-repeat', tone: 'blue' }" />
           </span>
         </template>
-        <template #cell-_installments="{ row }">{{ installmentText((row as ContractItem).item_key, currentSchedules) }}</template>
+        <template #cell-_installments="{ row }">{{ installmentOf(row as ContractItem) }}</template>
       </MiniTable>
     </DetailPanel>
   </SplitLayout>
