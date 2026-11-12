@@ -295,6 +295,42 @@ CONTRACTS = [
 		"pays": {0: 1, 1: 0.5},
 		"request": ([], False),
 	},
+	{
+		"no": "MAU-011",
+		"customer": 0,
+		"title": "Hợp đồng tư vấn đang soạn thảo (mẫu)",
+		"start": 10,
+		"end": 200,
+		"status": "draft",
+		"items": [once("Tư vấn giải pháp", "10%", 25_000_000, 40)],
+		"invoices": [],
+		"pays": {},
+		"request": ([], False),
+	},
+	{
+		"no": "MAU-012",
+		"customer": 1,
+		"title": "Hợp đồng đào tạo đã hủy (mẫu)",
+		"start": -10,
+		"end": 120,
+		"status": "cancelled",
+		"items": [once("Đào tạo nhân sự", "8%", 18_000_000, 30)],
+		"invoices": [],
+		"pays": {},
+		"request": ([], False),
+	},
+	{
+		"no": "MAU-013",
+		"customer": 2,
+		"title": "Hợp đồng bản quyền sắp hết hạn (mẫu)",
+		"start": -330,
+		"end": 20,
+		"status": "active",
+		"items": [recurring("Bản quyền theo quý", "10%", 20_000_000, "Quý")],
+		"invoices": [0],
+		"pays": {0: 1},
+		"request": ([], False),
+	},
 ]
 
 
@@ -428,6 +464,14 @@ def _schedules(contract):
 
 def _create_contract(spec, customer, contract_type, created):
 	doc = _build_doc(spec, customer, contract_type).insert()
+	if spec["status"] in ("draft", "cancelled"):
+		# Nháp và Đã hủy không có chứng từ: không kích hoạt.
+		if spec["status"] == "cancelled":
+			doc.cancel_contract()
+		refresh_contract_amounts(doc.name)
+		created["Contract"] += 1
+		created["Payment Schedule"] += len(_schedules(doc.name))
+		return
 	doc.activate()
 	name = doc.name
 	rows = _schedules(name)

@@ -30,6 +30,7 @@ import {
   isLocked,
   prefillFromSchedules,
   printUrl,
+  scheduleNamesOfContract,
   statusOf,
   toPayload,
   validateItems,
@@ -158,7 +159,45 @@ watch(
   { immediate: true },
 )
 
+// Điền sẵn từ màn Hợp đồng: /payment-requests/new?contract=HD-1 (chỉ khi thêm mới và không có ?schedules=).
+const contractParam = isEdit.value || scheduleNames.length ? '' : String(route.query.contract ?? '')
+const contractList = useList<{ name: string; contract_no: string; customer: string }>({
+  doctype: 'Contract',
+  fields: ['name', 'contract_no', 'customer'],
+  filters: { name: contractParam },
+  limit: 1,
+  immediate: false,
+})
+async function prefillFromContract() {
+  if (!contractParam) return
+  prefilling = true
+  try {
+    await contractList.reload()
+    const found = (contractList.data ?? [])[0]
+    if (!found) {
+      toast.warning(`Không tìm thấy hợp đồng ${contractParam}.`)
+      return
+    }
+    form.customer = found.customer
+    await nextTick()
+    await loadOpenSchedules()
+    const names = scheduleNamesOfContract(openSchedules.value, contractParam)
+    if (!names.length) {
+      ensureBlankRow(form.items)
+      toast.warning(`Hợp đồng ${found.contract_no} không còn đợt nào cần đề nghị thanh toán.`)
+      return
+    }
+    const byName = Object.fromEntries(names.map((n) => [n, found.customer]))
+    const { items } = prefillFromSchedules(names, byName, openSchedules.value)
+    form.items.splice(0, form.items.length, ...items)
+  } finally {
+    await nextTick()
+    prefilling = false
+  }
+}
+
 void prefillFromQuery()
+void prefillFromContract()
 
 function optionsFor(index: number): SelectOption[] {
   const chosen = new Set(form.items.filter((_it, i) => i !== index).map((it) => it.schedule))

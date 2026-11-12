@@ -40,6 +40,22 @@ import {
   statusOf,
   toFrappeFilters,
   toPayload,
+  collectedPercent,
+  detailFields,
+  detailTitle,
+  effectiveText,
+  installmentText,
+  isExpiringSoon,
+  itemAfterTax,
+  itemTotals,
+  nextDueDate,
+  nextDueText,
+  normalizeGroups,
+  overdueSummary,
+  partyLines,
+  periodBadge,
+  remainingText,
+  type ContractItem,
   validateExtra,
   validateItems,
   type ContractForm,
@@ -376,7 +392,8 @@ describe('danh sách', () => {
 
   it('groupTree đếm theo trạng thái', () => {
     const tree = groupTree([{ status: 'Nháp' }, { status: 'Nháp' }, { status: 'Đang hiệu lực' }, { status: 'Đã hủy' }])
-    expect(tree).toHaveLength(1)
+    expect(tree).toHaveLength(2)
+    expect(tree[1].key).toBe('expiring')
     expect(tree[0].label).toBe('Tất cả hợp đồng')
     expect(tree[0].count).toBe(4)
     expect(tree[0].children?.map((c) => [c.key, c.count])).toEqual([
@@ -407,9 +424,9 @@ describe('danh sách', () => {
 
   it('thẻ số liệu: Đang hiệu lực, Tổng giá trị, Đã thu, Còn phải thu', () => {
     const rows = [
-      { status: 'Đang hiệu lực', total_after_tax: 1000, paid_amount: 300, outstanding_amount: 700 },
-      { status: 'Nháp', total_after_tax: 500, paid_amount: 0, outstanding_amount: 0 },
-      { status: 'Đang hiệu lực', total_after_tax: 200, paid_amount: 200, outstanding_amount: 0 },
+      { name: 'A', status: 'Đang hiệu lực', total_after_tax: 1000, paid_amount: 300, outstanding_amount: 700 },
+      { name: 'B', status: 'Nháp', total_after_tax: 500, paid_amount: 0, outstanding_amount: 0 },
+      { name: 'C', status: 'Đang hiệu lực', total_after_tax: 200, paid_amount: 200, outstanding_amount: 0 },
     ] as Contract[]
     const cards = statCards(rows)
     expect(cards.map((c) => c.label)).toEqual([
@@ -418,7 +435,7 @@ describe('danh sách', () => {
       'Đã thu (VND)',
       'Còn phải thu (VND)',
     ])
-    expect(cards[0].value).toBe(2)
+    expect(cards[0].value).toBe('2 / 3')
     expect(cards[0].status).toBeDefined()
     expect(cards[0].key).toBe('Đang hiệu lực')
     expect(cards[1].value).toBe(formatCurrency(1700))
@@ -573,5 +590,195 @@ describe('tab Lịch thu', () => {
     expect(showScheduleTable('Nháp')).toBe(false)
     expect(showScheduleTable('Đang hiệu lực')).toBe(true)
     expect(SCHEDULE_DOCTYPE).toBe('Payment Schedule')
+  })
+})
+
+describe('danh sách hợp đồng (ticket A)', () => {
+  const TODAY = '2026-11-12'
+  const sch = (contract: string, due: string, total: number, paid: number, item_key = 'K1') => ({
+    contract,
+    due_date: due,
+    total_amount: total,
+    paid_amount: paid,
+    item_key,
+  })
+
+  it('cột mặc định đúng thứ tự, ghim, không cuộn ngang', () => {
+    const shown = COLUMNS.filter((c) => !c.hidden)
+    expect(shown.map((c) => c.label)).toEqual([
+      'STT',
+      'Số hợp đồng',
+      'Khách hàng / Nội dung',
+      'Trạng thái',
+      'Hiệu lực',
+      'Tổng sau thuế (VND)',
+      'Đã thu (VND)',
+      'Còn phải thu (VND)',
+      'Phụ trách',
+      'Thao tác',
+    ])
+    expect(shown[0].pin).toBe('left')
+    expect(shown[1].pin).toBe('left')
+    expect(shown[shown.length - 1].pin).toBe('right')
+    expect(shown.reduce((a, c) => a + c.width, 0)).toBeLessThanOrEqual(1320)
+  })
+
+  it('ba cột ẩn mặc định; ba cột tiền và Giá trị trước thuế được cộng', () => {
+    const hidden = COLUMNS.filter((c) => c.hidden).map((c) => c.label)
+    expect(hidden.sort()).toEqual(['Giá trị trước thuế (VND)', 'Loại hợp đồng', 'Ngày ký'].sort())
+    const rows = [1, 2, 3, 4, 5].map((n) => ({
+      total_before_tax: n * 100,
+      total_after_tax: n * 110,
+      paid_amount: n * 10,
+      outstanding_amount: n * 100,
+    })) as Contract[]
+    const totals = computeTotals(rows, COLUMNS)
+    expect(totals.total_before_tax).toBe(1500)
+    expect(totals.total_after_tax).toBe(1650)
+    expect(totals.paid_amount).toBe(150)
+    expect(totals.outstanding_amount).toBe(1500)
+  })
+
+  it('partyLines: chưa có tên hợp đồng thì "Chưa có nội dung"', () => {
+    expect(partyLines({ customer_name: 'Công ty A', contract_title: '' })).toEqual({ top: 'Công ty A', bottom: 'Chưa có nội dung' })
+    expect(partyLines({ customer_name: 'Công ty A', contract_title: null }).bottom).toBe('Chưa có nội dung')
+    expect(partyLines({ customer_name: 'A', contract_title: 'Bảo trì' }).bottom).toBe('Bảo trì')
+  })
+
+  it('số ngày còn lại', () => {
+    expect(remainingText('2026-11-22', TODAY)).toBe('còn 10 ngày')
+    expect(remainingText('2026-11-09', TODAY)).toBe('đã hết hạn 3 ngày')
+    expect(remainingText(null, TODAY)).toBe('chưa đặt')
+    expect(remainingText(TODAY, TODAY)).toBe('còn 0 ngày')
+  })
+
+  it('effectiveText', () => {
+    expect(effectiveText({ start_date: '2026-01-05', end_date: '2026-12-31' })).toBe('05/01/2026 – 31/12/2026')
+    expect(effectiveText({ start_date: '2026-01-05', end_date: null })).toBe('Từ 05/01/2026')
+    expect(effectiveText({ start_date: null, end_date: null })).toBe('Không có')
+  })
+
+  it('tỷ lệ đã thu', () => {
+    expect(collectedPercent(250_000, 1_000_000)).toBe(25)
+    expect(collectedPercent(100, 0)).toBe(0)
+    expect(collectedPercent(2_000, 1_000)).toBe(100)
+    expect(collectedPercent(1, 3)).toBe(33)
+  })
+
+  it('sắp hết hạn: gồm hai đầu', () => {
+    const r = (status: string, end: string | null) => ({ status, end_date: end })
+    expect(isExpiringSoon(r('Đang hiệu lực', '2026-11-12'), TODAY)).toBe(true)
+    expect(isExpiringSoon(r('Đang hiệu lực', '2026-12-12'), TODAY)).toBe(true)
+    expect(isExpiringSoon(r('Đang hiệu lực', '2026-12-13'), TODAY)).toBe(false)
+    expect(isExpiringSoon(r('Đang hiệu lực', '2026-11-11'), TODAY)).toBe(false)
+    expect(isExpiringSoon(r('Hết hạn', '2026-11-20'), TODAY)).toBe(false)
+    expect(isExpiringSoon(r('Đang hiệu lực', null), TODAY)).toBe(false)
+  })
+
+  it('thẻ: 3 / 5 và hết hạn trong 30 ngày; tone và đợt quá hạn', () => {
+    const rows = [
+      { name: 'A', status: 'Đang hiệu lực', end_date: '2026-11-27', total_after_tax: 1_000_000, paid_amount: 250_000, outstanding_amount: 750_000 },
+      { name: 'B', status: 'Đang hiệu lực', end_date: '2027-06-01', total_after_tax: 0, paid_amount: 0, outstanding_amount: 0 },
+      { name: 'C', status: 'Đang hiệu lực', end_date: null, total_after_tax: 0, paid_amount: 0, outstanding_amount: 0 },
+      { name: 'D', status: 'Nháp', end_date: null, total_after_tax: 0, paid_amount: 0, outstanding_amount: 0 },
+      { name: 'E', status: 'Đã hủy', end_date: null, total_after_tax: 0, paid_amount: 0, outstanding_amount: 0 },
+    ] as Contract[]
+    const schedules = [
+      sch('A', '2026-11-01', 500_000, 200_000),
+      sch('B', '2026-10-01', 300_000, 100_000),
+      sch('A', '2026-12-01', 100_000, 0),
+      sch('A', '2026-10-01', 100_000, 100_000),
+      sch('D', '2026-09-01', 999, 0),
+      sch('E', '2026-09-01', 999, 0),
+    ]
+    const cards = statCards(rows, schedules, TODAY)
+    expect(cards[0].value).toBe('3 / 5')
+    expect(cards[0].hint).toBe('1 hợp đồng hết hạn trong 30 ngày')
+    expect(cards[2].tone).toBe('green')
+    expect(cards[2].progress).toBe(25)
+    expect(cards[3].tone).toBe('amber')
+    expect(cards[3].hint).toBe(`2 đợt quá hạn · ${formatCurrency(500_000)}`)
+    // Lịch thu lỗi: chỉ thẻ phụ thuộc lịch thu hiện "Không có".
+    const failed = statCards(rows, null, TODAY)
+    expect(failed[3].hint).toBe('Không có')
+    expect(failed[0].value).toBe('3 / 5')
+  })
+
+  it('overdueSummary bỏ đợt Nháp, Đã hủy và hợp đồng ngoài tập đang tải', () => {
+    const s = [
+      sch('A', '2026-11-01', 500_000, 200_000),
+      sch('N', '2026-11-01', 300_000, 0),
+      sch('H', '2026-11-01', 300_000, 0),
+      sch('X', '2026-11-01', 300_000, 0),
+    ]
+    expect(overdueSummary(s, { A: 'Đang hiệu lực', N: 'Nháp', H: 'Đã hủy' }, TODAY)).toEqual({ count: 1, amount: 300_000 })
+  })
+
+  it('nextDueDate chọn ngày nhỏ nhất từ hôm nay trong đợt chưa thu đủ', () => {
+    const s = [
+      sch('A', '2026-11-01', 100, 0),
+      sch('A', '2026-12-20', 100, 0),
+      sch('A', '2026-11-12', 100, 100),
+      sch('A', '2026-11-30', 100, 40),
+    ]
+    expect(nextDueDate(s, TODAY)).toBe('2026-11-30')
+    expect(nextDueDate([sch('A', '2026-11-01', 100, 0)], TODAY)).toBeNull()
+    expect(nextDueText(null)).toBe('Không có')
+    expect(nextDueText('2026-11-30')).toBe('30/11/2026')
+  })
+
+  it('nút Sắp hết hạn: bộ lọc, normalizeGroups, cây nhóm', () => {
+    const f = { ...emptyFilters(), groups: ['expiring'] }
+    expect(toFrappeFilters(f, TODAY)).toEqual({ status: 'Đang hiệu lực', end_date: ['between', ['2026-11-12', '2026-12-12']] })
+    expect(filtersActive(f)).toBe(true)
+    expect(normalizeGroups(['Nháp', 'Hết hạn', 'expiring'], ['Nháp', 'Hết hạn'])).toEqual(['expiring'])
+    expect(normalizeGroups(['expiring', 'Nháp'], ['expiring'])).toEqual(['Nháp'])
+    expect(normalizeGroups(['Nháp'], ['Nháp', 'Hết hạn'])).toEqual(['Nháp'])
+    const tree = groupTree(
+      [
+        { status: 'Đang hiệu lực', end_date: '2026-11-20' },
+        { status: 'Đang hiệu lực', end_date: '2027-01-01' },
+        { status: 'Nháp', end_date: '2026-11-20' },
+      ],
+      TODAY,
+    )
+    expect(tree[0].count).toBe(3)
+    expect(tree[1]).toMatchObject({ key: 'expiring', label: 'Sắp hết hạn', count: 1 })
+  })
+
+  it('ô "Chỉ hợp đồng còn phải thu"', () => {
+    expect(emptyFilters().onlyOutstanding).toBe(false)
+    expect(toFrappeFilters({ ...emptyFilters(), onlyOutstanding: true }, TODAY)).toEqual({ outstanding_amount: ['>', 0] })
+    expect(filtersActive({ ...emptyFilters(), onlyOutstanding: true })).toBe(true)
+  })
+
+  it('chi tiết: tiêu đề, trường trống, không có "—"', () => {
+    expect(detailTitle({ contract_no: 'HD-01', customer_name: 'Công ty A' })).toBe('HD-01 · Công ty A')
+    expect(detailTitle({ contract_no: 'HD-01', customer_name: null })).toBe('HD-01')
+    const fields = detailFields({ contract_no: 'HD-01', customer_name: 'Công ty A', start_date: '2026-01-01' } as Contract)
+    const byLabel = Object.fromEntries(fields.map((f) => [f.label, f.value]))
+    expect(byLabel['Tên hợp đồng']).toBe('')
+    expect(byLabel['Ngày ký']).toBe('')
+    expect(byLabel['Thời hạn còn lại']).toBe('')
+    expect(byLabel['Ngày bắt đầu']).toBe('01/01/2026')
+    expect(JSON.stringify(fields)).not.toContain('—')
+    expect(detailTitle({ contract_no: 'A', customer_name: 'B' })).not.toContain('—')
+  })
+
+  it('hạng mục: nhãn kỳ, đợt thu, tổng', () => {
+    const quarterly = { billing_type: 'Định kỳ', period: 'Quý', period_start: '2026-01-01', period_end: '2026-12-31' } as ContractItem
+    expect(periodBadge(quarterly, null)).toBe('Hàng quý · 4 kỳ')
+    expect(periodBadge({ ...quarterly, period_end: null } as ContractItem, '2026-12-31')).toBe('Hàng quý · 4 kỳ')
+    expect(periodBadge({ billing_type: 'Một lần' } as ContractItem, null)).toBeNull()
+    const four = [sch('A', '2026-01-01', 100, 100), sch('A', '2026-04-01', 100, 0), sch('A', '2026-07-01', 100, 0), sch('A', '2026-10-01', 100, 50)]
+    expect(installmentText('K1', four)).toBe('đã thu 1/4')
+    expect(installmentText('K9', four)).toBe('Không có')
+    expect(installmentText('K1', null)).toBe('Không có')
+    const items = [
+      { amount_before_tax: 1000, tax_amount: 100 },
+      { amount_before_tax: 2000, tax_amount: 0 },
+    ] as ContractItem[]
+    expect(itemAfterTax(items[0])).toBe(1100)
+    expect(itemTotals(items)).toEqual({ before: 3000, tax: 100, after: 3100 })
   })
 })

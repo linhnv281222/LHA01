@@ -2,7 +2,7 @@
 // Màn danh sách Hợp đồng, theo mẫu CustomerList.vue và ContractTypeList.vue.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, useCall, useDoc, useList } from 'frappe-ui'
+import { Button, Tooltip, useCall, useDoc, useList } from 'frappe-ui'
 import {
   DataTable,
   DetailPanel,
@@ -13,8 +13,8 @@ import {
   PrimaryButton,
   SplitLayout,
   StatCards,
+  StatusBadge,
   formatCurrency,
-  formatDate,
   type Column,
   type DataTableExpose,
   type DetailField,
@@ -22,18 +22,33 @@ import {
   type StatCard,
 } from '@/standard'
 import type { ContractCustomer, ContractType } from '@/types/doctypes'
+import { todayStr } from '@/pages/payment-schedules/paymentSchedule'
 import {
   COLUMNS,
-  CONTRACT_STATUS,
   DOCTYPE,
+  SCHEDULE_LIST_FIELDS,
+  collectedPercent,
+  detailFields,
+  detailTitle,
+  effectiveText,
   emptyFilters,
   filtersActive,
   groupTree,
+  installmentText,
+  itemAfterTax,
+  itemTotals,
+  nextDueDate,
+  nextDueText,
+  normalizeGroups,
+  partyLines,
+  periodBadge,
+  remainingText,
   statCards,
   statusOf,
   toFrappeFilters,
   type Contract,
   type ContractItem,
+  type ContractSchedule,
   type PanelFilters,
 } from './contract'
 
@@ -72,7 +87,7 @@ const list = useList<Contract>({
   orderBy: 'modified desc',
   limit: 5000,
 })
-const allForTree = useList<Contract>({ doctype: DOCTYPE, fields: ['name', 'status'], limit: 5000 })
+const allForTree = useList<Contract>({ doctype: DOCTYPE, fields: ['name', 'status', 'end_date'], limit: 5000 })
 
 // Lựa chọn cho các ô lọc.
 const customers = useList<ContractCustomer>({ doctype: 'Contract Customer', fields: ['name', 'customer_name'], orderBy: 'customer_name asc', limit: 5000 })
@@ -88,7 +103,27 @@ const rows = computed(() => list.data ?? [])
 const card = ref<string | null>(null)
 const tableRows = computed(() => (card.value ? rows.value.filter((r) => r.status === card.value) : rows.value))
 
-const cards = computed<StatCard[]>(() => statCards(rows.value))
+// Tích "Sắp hết hạn" thì bỏ các trạng thái; tích lại trạng thái thì bỏ "Sắp hết hạn".
+watch(
+  () => draft.value.groups,
+  (next, prev) => {
+    const v = normalizeGroups(next, prev ?? [])
+    if (v !== next) draft.value.groups = v
+  },
+)
+
+// Lịch thu của các hợp đồng đang hiển thị (lọc ở server). Lỗi không làm hỏng bảng chính.
+const schedules = useList<ContractSchedule & { name: string }>({
+  doctype: 'Payment Schedule',
+  fields: SCHEDULE_LIST_FIELDS,
+  filters: () => ({ contract: ['in', rows.value.length ? rows.value.map((r) => r.name) : ['']] }),
+  limit: 5000,
+})
+const scheduleRows = computed<ContractSchedule[] | null>(() =>
+  schedules.error || schedules.loading ? null : (schedules.data ?? []),
+)
+const today = computed(() => todayStr())
+const cards = computed<StatCard[]>(() => statCards(rows.value, scheduleRows.value, today.value))
 
 function search() {
   applied.value = JSON.parse(JSON.stringify(draft.value)) as PanelFilters
@@ -110,32 +145,31 @@ const detail = useDoc<Contract>({ doctype: DOCTYPE, name: () => selected.value ?
 watch(selected, (v) => v && void detail.reload(), { immediate: true })
 const detailItems = computed<ContractItem[]>(() => (detail.doc?.name === selected.value ? (detail.doc?.items ?? []) : []))
 
-const detailFields = computed<DetailField[]>(() => {
-  const r = current.value
-  if (!r) return []
-  return [
-    { label: 'Số hợp đồng', value: r.contract_no },
-    { label: 'Khách hàng', value: r.customer_name },
-    { label: 'Loại hợp đồng', value: r.contract_type_name },
-    { label: 'Tên hợp đồng', value: r.contract_title },
-    { label: 'Trạng thái', value: statusOf(r)?.label ?? r.status },
-    { label: 'Người phụ trách', value: r.responsible_name },
-    { label: 'Ngày ký', value: formatDate(r.signed_date) },
-    { label: 'Ngày bắt đầu', value: formatDate(r.start_date) },
-    { label: 'Ngày kết thúc', value: formatDate(r.end_date) },
-    { label: 'Giá trị trước thuế (VND)', value: formatCurrency(r.total_before_tax) },
-    { label: 'Tiền thuế (VND)', value: formatCurrency(r.total_tax) },
-    { label: 'Tổng sau thuế (VND)', value: formatCurrency(r.total_after_tax) },
-    { label: 'Ghi chú', value: r.notes, wide: true },
-  ]
+const fields = computed<DetailField[]>(() => (current.value ? detailFields(current.value) : []))
+const currentSchedules = computed<ContractSchedule[] | null>(() =>
+  scheduleRows.value ? scheduleRows.value.filter((s) => s.contract === selected.value) : null,
+)
+const nextDue = computed(() => (currentSchedules.value ? nextDueText(nextDueDate(currentSchedules.value, today.value)) : 'Không có'))
+const itemTotalsRow = computed(() => {
+  const t = itemTotals(detailItems.value)
+  return {
+    item_name: 'Tổng',
+    amount_before_tax: formatCurrency(t.before),
+    tax_amount: formatCurrency(t.tax),
+    _after: formatCurrency(t.after),
+  }
 })
 
+const badgeOf = (row: unknown) => periodBadge(row as ContractItem, detail.doc?.end_date)
+
 const ITEM_COLUMNS: Column<ContractItem>[] = [
-  { key: 'item_name', label: 'Tên hạng mục', width: 260 },
-  { key: 'billing_type', label: 'Kiểu thu', width: 120 },
-  { key: 'vat_rate', label: 'Thuế suất', width: 140 },
-  { key: 'amount_before_tax', label: 'Trước thuế (VND)', width: 160, type: 'currency' },
-  { key: 'tax_amount', label: 'Tiền thuế (VND)', width: 150, type: 'currency' },
+  { key: 'item_name', label: 'Tên hạng mục', width: 220 },
+  { key: '_billing', label: 'Kiểu thu', width: 190 },
+  { key: 'vat_rate', label: 'Thuế suất', width: 110 },
+  { key: 'amount_before_tax', label: 'Trước thuế (VND)', width: 150, type: 'currency' },
+  { key: 'tax_amount', label: 'Tiền thuế (VND)', width: 140, type: 'currency' },
+  { key: '_after', label: 'Sau thuế (VND)', width: 150, type: 'currency', format: (i) => formatCurrency(itemAfterTax(i)) },
+  { key: '_installments', label: 'Đợt thu', width: 120, align: 'right' },
 ]
 
 const table = ref<DataTableExpose | null>(null)
@@ -147,17 +181,18 @@ function exportExcel() {
 <template>
   <SplitLayout :searching="list.loading" @search="search">
     <template #group>
-      <GroupTree v-model="draft.groups" :nodes="groupTree(allForTree.data ?? [])" />
+      <GroupTree v-model="draft.groups" :nodes="groupTree(allForTree.data ?? [], today)" />
     </template>
     <template #filters>
       <FnField v-model="draft.contractNo" field="f-contract-no" label="Số hợp đồng" />
       <FnField v-model="draft.customer" field="f-customer" label="Khách hàng" type="select" :options="customerOptions" />
       <FnField v-model="draft.responsibleUser" field="f-responsible" label="Người phụ trách" type="select" :options="userOptions" />
       <FnField v-model="draft.contractType" field="f-contract-type" label="Loại hợp đồng" type="select" :options="typeOptions" />
+      <FnField v-model="draft.onlyOutstanding" field="f-only-outstanding" label="Chỉ hợp đồng còn phải thu" type="checkbox" />
       <button type="button" class="text-base text-ink-blue-link hover:underline" @click="clearAll">Xóa bộ lọc</button>
     </template>
 
-    <PageTitle title="Hợp đồng" :count="tableRows.length">
+    <PageTitle title="Hợp đồng" :count="tableRows.length" :subtitle="`${tableRows.length} hợp đồng`">
       <template #actions>
         <Button size="md" variant="outline" icon-left="lucide-file-spreadsheet" label="Xuất Excel" @click="exportExcel" />
         <PrimaryButton icon-left="lucide-plus" label="Thêm hợp đồng" :route="'/contracts/new'" />
@@ -171,6 +206,11 @@ function exportExcel() {
       <button type="button" class="ml-2 underline" @click="list.reload()">Thử lại</button>
     </p>
 
+    <p v-if="schedules.error" class="rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-base text-ink-red-7" role="alert">
+      Không tải được lịch thu: {{ schedules.error.message }}
+      <button type="button" class="ml-2 underline" @click="schedules.reload()">Thử lại</button>
+    </p>
+
     <DataTable
       ref="table"
       v-model:selected="selected"
@@ -181,23 +221,102 @@ function exportExcel() {
       caption="Bấm một dòng để xem chi tiết. Chưa có hợp đồng? Bấm Thêm hợp đồng để tạo."
       @clear-filters="clearAll"
     >
+      <template #cell-_party="{ row }">
+        <div class="min-w-0">
+          <div class="truncate text-base-semibold text-ink-gray-9">{{ partyLines(row).top }}</div>
+          <div class="truncate text-sm text-ink-gray-5">{{ partyLines(row).bottom }}</div>
+        </div>
+      </template>
+      <template #cell-_effective="{ row }">
+        <div>
+          <div class="whitespace-nowrap text-base text-ink-gray-8">{{ effectiveText(row) }}</div>
+          <div class="text-sm" :class="(row.end_date ?? '9999') < today ? 'text-ink-red-7' : 'text-ink-gray-5'">
+            {{ remainingText(row.end_date, today) }}
+          </div>
+        </div>
+      </template>
+      <template #cell-outstanding_amount="{ row }">
+        <div class="text-right">
+          <div class="tabular-nums" :class="Number(row.outstanding_amount ?? 0) > 0 ? 'text-ink-amber-7' : 'text-ink-gray-8'">
+            {{ formatCurrency(row.outstanding_amount) }}
+          </div>
+          <div
+            class="ml-auto mt-1 h-1 w-full overflow-hidden rounded-full bg-surface-gray-3"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="collectedPercent(row.paid_amount, row.total_after_tax)"
+            :aria-label="`Đã thu ${collectedPercent(row.paid_amount, row.total_after_tax)}%`"
+          >
+            <div class="h-full rounded-full bg-surface-green-5" :style="{ width: `${collectedPercent(row.paid_amount, row.total_after_tax)}%` }" />
+          </div>
+        </div>
+      </template>
       <template #cell-_actions="{ row }">
-        <Button
-          size="sm"
-          variant="ghost"
-          icon-left="lucide-pencil"
-          label="Sửa"
-          :route="`/contracts/${encodeURIComponent(row.name)}/edit`"
-          @click.stop
-        />
+        <Tooltip text="Sửa">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="lucide-pencil"
+            aria-label="Sửa"
+            :route="`/contracts/${encodeURIComponent(row.name)}/edit`"
+            @click.stop
+          />
+        </Tooltip>
       </template>
     </DataTable>
     <p v-if="!list.loading && !list.error && !rows.length" class="text-base text-ink-gray-5">
       Chưa có hợp đồng. Bấm Thêm hợp đồng để tạo.
     </p>
 
-    <DetailPanel v-if="current" :title="`${current.contract_no} — ${current.customer_name ?? ''}`" :fields="detailFields" @close="selected = null">
+    <DetailPanel v-if="current" :title="detailTitle(current)" :fields="fields" @close="selected = null">
+      <template #badge>
+        <StatusBadge :status="statusOf(current)" />
+      </template>
+      <template #aside>
+        <dl class="space-y-3">
+          <div>
+            <dt class="text-sm text-ink-gray-5">Tổng sau thuế (VND)</dt>
+            <dd class="text-lg-semibold tabular-nums text-ink-gray-9">{{ formatCurrency(current.total_after_tax) }}</dd>
+            <dd class="text-sm text-ink-gray-5">Tiền thuế: {{ formatCurrency(current.total_tax) }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-ink-gray-5">Đã thu (VND)</dt>
+            <dd class="text-lg-semibold tabular-nums text-ink-green-7">{{ formatCurrency(current.paid_amount) }}</dd>
+          </div>
+          <div>
+            <dt class="text-sm text-ink-gray-5">Còn phải thu (VND)</dt>
+            <dd class="text-lg-semibold tabular-nums text-ink-amber-7">{{ formatCurrency(current.outstanding_amount) }}</dd>
+            <dd class="text-sm" :class="nextDue === 'Không có' ? 'text-ink-gray-4' : 'text-ink-gray-5'">
+              Đến hạn đợt kế tiếp: {{ nextDue }}
+            </dd>
+          </div>
+          <div>
+            <div
+              class="h-1.5 overflow-hidden rounded-full bg-surface-gray-3"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-valuenow="collectedPercent(current.paid_amount, current.total_after_tax)"
+              aria-label="Tiến độ thu"
+            >
+              <div
+                class="h-full rounded-full bg-surface-green-5"
+                :style="{ width: `${collectedPercent(current.paid_amount, current.total_after_tax)}%` }"
+              />
+            </div>
+            <p class="mt-1 text-sm text-ink-gray-5">Đã thu {{ collectedPercent(current.paid_amount, current.total_after_tax) }}%</p>
+          </div>
+        </dl>
+      </template>
       <template #actions>
+        <Button
+          size="sm"
+          variant="outline"
+          icon-left="lucide-file-plus"
+          label="Tạo đề nghị thanh toán"
+          :route="`/payment-requests/new?contract=${encodeURIComponent(current.name)}`"
+        />
         <Button
           size="sm"
           variant="outline"
@@ -207,7 +326,15 @@ function exportExcel() {
         />
       </template>
       <h3 class="mb-2 text-base-semibold text-ink-gray-8">Hạng mục</h3>
-      <MiniTable :columns="ITEM_COLUMNS" :rows="detailItems" empty-text="Hợp đồng chưa có hạng mục." />
+      <MiniTable :columns="ITEM_COLUMNS" :rows="detailItems" :totals="itemTotalsRow" empty-text="Hợp đồng chưa có hạng mục.">
+        <template #cell-_billing="{ row }">
+          <span class="inline-flex flex-wrap items-center gap-1.5">
+            {{ row.billing_type }}
+            <StatusBadge v-if="badgeOf(row)" :status="{ label: badgeOf(row) as string, icon: 'lucide-repeat', tone: 'blue' }" />
+          </span>
+        </template>
+        <template #cell-_installments="{ row }">{{ installmentText((row as ContractItem).item_key, currentSchedules) }}</template>
+      </MiniTable>
     </DetailPanel>
   </SplitLayout>
 </template>
