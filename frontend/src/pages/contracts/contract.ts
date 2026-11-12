@@ -15,6 +15,7 @@ import {
   type StatusDef,
   type TreeNode,
 } from '@/standard'
+import { todayStr } from '@/pages/payment-schedules/paymentSchedule'
 
 export const DOCTYPE = 'Contract'
 
@@ -80,9 +81,24 @@ export const EXPIRING_DAYS = 30
 export const MONEY_EPS = 0.01
 const NO_VALUE = 'Không có'
 
-const todayIso = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+/** Số đợt thu tối đa tải về một lần; chạm mức này thì coi là chưa đủ dữ liệu. */
+export const SCHEDULE_LIMIT = 5000
+
+/** Bộ lọc server cho đợt quá hạn: đến hạn trước hôm nay và chưa thu đủ (không dùng IN theo tên hợp đồng). */
+export const overdueScheduleFilters = (today: string = todayStr()): Record<string, [string, string]> => ({
+  due_date: ['<', today],
+  payment_status: ['!=', 'Đã thu'],
+})
+
+/** Lịch thu đủ dùng để tính số liệu: không lỗi, không đang tải và chưa chạm giới hạn. Ngược lại trả null. */
+export function usableSchedules<T>(
+  data: T[] | null | undefined,
+  failed: boolean,
+  loading: boolean,
+  limit: number = SCHEDULE_LIMIT,
+): T[] | null {
+  if (failed || loading || !data || data.length >= limit) return null
+  return data
 }
 
 export const COLUMNS: Column<Contract>[] = [
@@ -117,12 +133,12 @@ export function collectedPercent(paid: number | null | undefined, total: number 
 }
 
 /** Số ngày từ hôm nay đến ngày kết thúc (âm = đã qua); null khi chưa có ngày kết thúc. */
-export function daysLeft(end: string | null | undefined, today: string = todayIso()): number | null {
+export function daysLeft(end: string | null | undefined, today: string = todayStr()): number | null {
   if (!end) return null
   return diffDays(parseIso(end), parseIso(today))
 }
 
-export function remainingText(end: string | null | undefined, today: string = todayIso()): string {
+export function remainingText(end: string | null | undefined, today: string = todayStr()): string {
   const n = daysLeft(end, today)
   if (n === null) return 'chưa đặt'
   return n >= 0 ? `còn ${n} ngày` : `đã hết hạn ${-n} ngày`
@@ -141,12 +157,12 @@ export function partyLines(row: Pick<Contract, 'customer_name' | 'contract_title
   return { top: row.customer_name ?? '', bottom: row.contract_title?.trim() ? row.contract_title : 'Chưa có nội dung' }
 }
 
-export function expiringRange(today: string = todayIso()): { from: string; to: string } {
+export function expiringRange(today: string = todayStr()): { from: string; to: string } {
   return { from: today, to: toIso(addDays(parseIso(today), EXPIRING_DAYS)) }
 }
 
 /** Đang hiệu lực và ngày kết thúc từ hôm nay đến hôm nay + 30 ngày (gồm hai đầu). */
-export function isExpiringSoon(row: { status?: string | null; end_date?: string | null }, today: string = todayIso()): boolean {
+export function isExpiringSoon(row: { status?: string | null; end_date?: string | null }, today: string = todayStr()): boolean {
   if (row.status !== 'Đang hiệu lực' || !row.end_date) return false
   const { from, to } = expiringRange(today)
   return row.end_date >= from && row.end_date <= to
@@ -173,7 +189,7 @@ export const shortfall = (s: Pick<ContractSchedule, 'total_amount' | 'paid_amoun
 export function overdueSummary(
   schedules: ContractSchedule[],
   statusByContract: Record<string, string | null | undefined>,
-  today: string = todayIso(),
+  today: string = todayStr(),
 ): { count: number; amount: number } {
   let count = 0
   let amount = 0
@@ -188,7 +204,7 @@ export function overdueSummary(
 }
 
 /** Ngày đến hạn nhỏ nhất từ hôm nay trong các đợt chưa thu đủ; không có thì null. */
-export function nextDueDate(schedules: ContractSchedule[], today: string = todayIso()): string | null {
+export function nextDueDate(schedules: ContractSchedule[], today: string = todayStr()): string | null {
   const dates = schedules
     .filter((s) => s.due_date && s.due_date >= today && shortfall(s) > MONEY_EPS)
     .map((s) => s.due_date as string)
@@ -202,7 +218,7 @@ export const nextDueText = (date: string | null): string => (date ? formatDate(d
 export function statCards(
   rows: Pick<Contract, 'name' | 'status' | 'end_date' | 'total_after_tax' | 'paid_amount' | 'outstanding_amount'>[],
   schedules: ContractSchedule[] | null = null,
-  today: string = todayIso(),
+  today: string = todayStr(),
 ): StatCard[] {
   const sum = (pick: (r: (typeof rows)[number]) => number | null | undefined) =>
     rows.reduce((acc, r) => acc + Number(pick(r) ?? 0), 0)
@@ -242,7 +258,7 @@ export function statCards(
 }
 
 /** Cây "Truy vấn nhóm": Tất cả hợp đồng → từng trạng thái; thêm nút gốc "Sắp hết hạn" (không cộng vào "Tất cả"). */
-export function groupTree(rows: Pick<Contract, 'status' | 'end_date'>[], today: string = todayIso()): TreeNode[] {
+export function groupTree(rows: Pick<Contract, 'status' | 'end_date'>[], today: string = todayStr()): TreeNode[] {
   return [
     {
       key: 'all',
@@ -287,7 +303,7 @@ export function emptyFilters(): PanelFilters {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function toFrappeFilters(f: PanelFilters, today: string = todayIso()): Record<string, any> {
+export function toFrappeFilters(f: PanelFilters, today: string = todayStr()): Record<string, any> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filters: Record<string, any> = {}
   if (f.groups.includes(EXPIRING_KEY)) {
@@ -348,8 +364,11 @@ export const PERIOD_LABEL: Record<string, string> = {
 /** "Hàng quý · 4 kỳ" cho hạng mục Định kỳ; hạng mục khác null. */
 export function periodBadge(item: ContractItem, contractEnd?: string | null): string | null {
   if (item.billing_type !== 'Định kỳ') return null
+  const end = item.period_end || contractEnd
+  if (!item.period_start || !end) return null
   const label = item.period === 'Ngày' ? `Mỗi ${item.period_days ?? 0} ngày` : (PERIOD_LABEL[item.period ?? ''] ?? item.period ?? '')
-  const n = recurringPeriods(item.period ?? '', item.period_start ?? '', item.period_end || contractEnd || '', item.period_days).length
+  const n = recurringPeriods(item.period ?? '', item.period_start, end, item.period_days).length
+  if (n === 0) return null
   return `${label} · ${n} kỳ`
 }
 
@@ -359,6 +378,25 @@ export function installmentText(itemKey: string | null | undefined, schedules: C
   const mine = schedules.filter((s) => s.item_key === itemKey)
   if (!mine.length) return NO_VALUE
   return `đã thu ${mine.filter((s) => shortfall(s) <= MONEY_EPS).length}/${mine.length}`
+}
+
+/** Ba thẻ số liệu trong khối tiền của chi tiết dòng chọn (StatCards). */
+export function asideCards(
+  row: Pick<Contract, 'total_after_tax' | 'total_tax' | 'paid_amount' | 'outstanding_amount'>,
+  nextDueLabel: string,
+): StatCard[] {
+  const pct = collectedPercent(row.paid_amount, row.total_after_tax)
+  return [
+    { key: 'total', label: 'Tổng sau thuế (VND)', value: formatCurrency(row.total_after_tax), hint: `Tiền thuế: ${formatCurrency(row.total_tax)}` },
+    { key: 'paid', label: 'Đã thu (VND)', value: formatCurrency(row.paid_amount), tone: 'green', progress: pct, hint: `Đã thu ${pct}%` },
+    {
+      key: 'outstanding',
+      label: 'Còn phải thu (VND)',
+      value: formatCurrency(row.outstanding_amount),
+      tone: 'amber',
+      hint: `Đến hạn đợt kế tiếp: ${nextDueLabel}`,
+    },
+  ]
 }
 
 export const itemAfterTax = (item: Pick<ContractItem, 'amount_before_tax' | 'tax_amount'>): number =>

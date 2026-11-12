@@ -54,6 +54,10 @@ import {
   overdueSummary,
   partyLines,
   periodBadge,
+  asideCards,
+  overdueScheduleFilters,
+  usableSchedules,
+  SCHEDULE_LIMIT,
   remainingText,
   type ContractItem,
   validateExtra,
@@ -780,5 +784,43 @@ describe('danh sách hợp đồng (ticket A)', () => {
     ] as ContractItem[]
     expect(itemAfterTax(items[0])).toBe(1100)
     expect(itemTotals(items)).toEqual({ before: 3000, tax: 100, after: 3100 })
+  })
+})
+
+describe('Contract list: lịch thu, thẻ chi tiết, nhãn kỳ thiếu ngày', () => {
+  it('usableSchedules: lỗi, đang tải hoặc chạm giới hạn thì null', () => {
+    const data = [1, 2, 3]
+    expect(usableSchedules(data, false, false)).toEqual(data)
+    expect(usableSchedules(data, true, false)).toBeNull()
+    expect(usableSchedules(data, false, true)).toBeNull()
+    expect(usableSchedules(undefined, false, false)).toBeNull()
+    expect(usableSchedules(new Array(SCHEDULE_LIMIT).fill(0), false, false)).toBeNull()
+    expect(usableSchedules(new Array(SCHEDULE_LIMIT - 1).fill(0), false, false)).toHaveLength(SCHEDULE_LIMIT - 1)
+    expect(usableSchedules(data, false, false, 3)).toBeNull()
+  })
+
+  it('overdueScheduleFilters lọc ở server theo hạn và trạng thái, không dùng IN', () => {
+    expect(overdueScheduleFilters('2026-11-12')).toEqual({ due_date: ['<', '2026-11-12'], payment_status: ['!=', 'Đã thu'] })
+  })
+
+  it('asideCards: 3 thẻ tiền cho dòng chọn', () => {
+    const cards = asideCards(
+      { total_after_tax: 1_000_000, total_tax: 90_909, paid_amount: 250_000, outstanding_amount: 750_000 },
+      '15/12/2026',
+    )
+    expect(cards.map((c) => c.key)).toEqual(['total', 'paid', 'outstanding'])
+    expect(cards[0].hint).toBe(`Tiền thuế: ${formatCurrency(90_909)}`)
+    expect(cards[1].tone).toBe('green')
+    expect(cards[1].progress).toBe(25)
+    expect(cards[2].tone).toBe('amber')
+    expect(cards[2].value).toBe(formatCurrency(750_000))
+    expect(cards[2].hint).toBe('Đến hạn đợt kế tiếp: 15/12/2026')
+  })
+
+  it('periodBadge trả null khi thiếu ngày hoặc không có kỳ nào', () => {
+    const q = { billing_type: 'Định kỳ', period: 'Quý', period_start: '2026-01-01', period_end: '2026-12-31' } as ContractItem
+    expect(periodBadge({ ...q, period_start: null } as ContractItem, '2026-12-31')).toBeNull()
+    expect(periodBadge({ ...q, period_end: null } as ContractItem, null)).toBeNull()
+    expect(periodBadge({ ...q, period_start: '2026-12-31', period_end: '2026-01-01' } as ContractItem, null)).toBeNull()
   })
 })
