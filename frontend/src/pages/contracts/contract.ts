@@ -10,6 +10,7 @@ import {
   lowerFirst,
   type Column,
   type Rules,
+  type StatCard,
   type StatusDef,
   type TreeNode,
 } from '@/standard'
@@ -92,8 +93,29 @@ export const COLUMNS: Column<Contract>[] = [
   },
   { key: 'total_before_tax', label: 'Giá trị trước thuế (VND)', width: 190, type: 'currency', sum: true },
   { key: 'total_after_tax', label: 'Tổng sau thuế (VND)', width: 170, type: 'currency', sum: true },
+  { key: 'paid_amount', label: 'Đã thu (VND)', width: 150, type: 'currency', sum: true },
+  { key: 'outstanding_amount', label: 'Còn phải thu (VND)', width: 170, type: 'currency', sum: true },
   { key: '_actions', label: 'Thao tác', width: 110, pin: 'right', sortable: false, filter: 'none', required: true },
 ]
+
+/** Thẻ số liệu của danh sách, tính trên dữ liệu đã lọc. Thẻ "Đang hiệu lực" bấm được để lọc. */
+export function statCards(
+  rows: Pick<Contract, 'status' | 'total_after_tax' | 'paid_amount' | 'outstanding_amount'>[],
+): StatCard[] {
+  const sum = (pick: (r: (typeof rows)[number]) => number | null | undefined) =>
+    rows.reduce((acc, r) => acc + Number(pick(r) ?? 0), 0)
+  return [
+    {
+      key: 'Đang hiệu lực',
+      label: 'Đang hiệu lực',
+      value: rows.filter((r) => r.status === 'Đang hiệu lực').length,
+      status: CONTRACT_STATUS['Đang hiệu lực'],
+    },
+    { key: 'total', label: 'Tổng giá trị sau thuế (VND)', value: formatCurrency(sum((r) => r.total_after_tax)) },
+    { key: 'paid', label: 'Đã thu (VND)', value: formatCurrency(sum((r) => r.paid_amount)) },
+    { key: 'outstanding', label: 'Còn phải thu (VND)', value: formatCurrency(sum((r) => r.outstanding_amount)) },
+  ]
+}
 
 /** Cây "Truy vấn nhóm": Tất cả hợp đồng → từng trạng thái, kèm số lượng. */
 export function groupTree(rows: Pick<Contract, 'status'>[]): TreeNode[] {

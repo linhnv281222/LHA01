@@ -2,7 +2,7 @@
 // Form thêm mới / cập nhật Hóa đơn, theo mẫu ContractForm.vue. Chuẩn chưa có bảng nhập nhiều dòng
 // nên mỗi dòng đợt là một hàng FnField (như ContractItemRows.vue).
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Alert, Button, LoadingText, dialog, toast, useCall, useDoc, useDoctype, useList } from 'frappe-ui'
 import {
   FnField,
@@ -17,6 +17,7 @@ import {
   type SelectOption,
 } from '@/standard'
 import type { ContractCustomer } from '@/types/doctypes'
+import { parseScheduleQuery } from '@/pages/payment-schedules/paymentSchedule'
 import {
   DOCTYPE,
   FORM_RULES,
@@ -28,6 +29,7 @@ import {
   ensureBlankRow,
   fromDoc,
   isLocked,
+  prefillItems,
   toPayload,
   validateItems,
   MSG_CANCELLED_LOCKED,
@@ -94,9 +96,43 @@ async function loadOpenSchedules() {
   const res = await openCall.submit({ customer: form.customer, ...(props.name ? { exclude_invoice: props.name } : {}) })
   openSchedules.value = unwrap<OpenSchedule>(res)
 }
+// Điền sẵn từ Lịch thu tiền: /invoices/new?schedules=DT-1,DT-2 (chỉ khi thêm mới).
+// Cờ `prefilling` để watcher đổi khách hàng không xóa dòng và không tải đợt lần hai.
+const route = useRoute()
+let prefilling = false
+const scheduleNames = isEdit.value ? [] : parseScheduleQuery(route.query.schedules)
+const prefillList = useList<{ name: string; customer: string }>({
+  doctype: 'Payment Schedule',
+  fields: ['name', 'customer'],
+  filters: { name: ['in', scheduleNames] },
+  limit: 5000,
+  immediate: false,
+})
+async function prefillFromQuery() {
+  if (!scheduleNames.length) return
+  prefilling = true
+  try {
+    await prefillList.reload()
+    const customers = Object.fromEntries((prefillList.data ?? []).map((s) => [s.name, s.customer]))
+    const first = scheduleNames.map((n) => customers[n]).find(Boolean) ?? ''
+    form.customer = first
+    await nextTick()
+    await loadOpenSchedules()
+    const { items, skipped } = prefillItems(scheduleNames, customers, openSchedules.value, first)
+    form.items.splice(0, form.items.length, ...items)
+    if (skipped.length) {
+      toast.warning(`Đã bỏ qua ${skipped.length} đợt không hợp lệ (đã xuất hóa đơn, đã thu đủ hoặc khác khách hàng): ${skipped.join(', ')}`)
+    }
+  } finally {
+    await nextTick()
+    prefilling = false
+  }
+}
+
 watch(
   () => form.customer,
   (value, old) => {
+    if (prefilling) return
     if (!isEdit.value && old !== undefined && value !== old) {
       // Đổi khách hàng thì bỏ các đợt đã chọn (đợt thuộc khách hàng khác).
       form.items.splice(0, form.items.length)
@@ -106,6 +142,8 @@ watch(
   },
   { immediate: true },
 )
+
+void prefillFromQuery()
 
 function optionsFor(index: number): SelectOption[] {
   const chosen = new Set(form.items.filter((_it, i) => i !== index).map((it) => it.schedule))

@@ -256,6 +256,40 @@ class TestPaymentSchedule(IntegrationTestCase):
 		doc.reload()
 		self.assertEqual(doc.status, "Nháp")
 
+	# ---- người phụ trách (ticket 12) ----
+
+	def test_schedule_gets_responsible_user_on_activate(self):
+		user = make_user("pt.dot1@example.com", "Quản lý hợp đồng")
+		doc = active(example_contract(responsible_user=user))
+		rows = schedules(doc.name)
+		self.assertTrue(rows)
+		self.assertTrue(all(r.responsible_user == user for r in rows))
+		found = frappe.get_all(DT, filters={"responsible_user": user, "contract": doc.name})
+		self.assertEqual(len(found), len(rows))
+
+	def test_change_responsible_user_updates_all_schedules(self):
+		first = make_user("pt.dot2@example.com", "Quản lý hợp đồng")
+		second = make_user("pt.dot3@example.com", "Quản lý hợp đồng")
+		doc = active(example_contract(responsible_user=first))
+		with_docs = schedules(doc.name)[0].name
+		frappe.db.set_value(DT, with_docs, "paid_amount", 1000, update_modified=False)
+		doc.reload()
+		doc.responsible_user = second
+		doc.save()
+		rows = schedules(doc.name)
+		self.assertTrue(all(r.responsible_user == second for r in rows))
+		self.assertIn(with_docs, [r.name for r in rows])
+
+	def test_patch_fills_responsible_user(self):
+		from contract_tracker.patches.v0_1.fill_schedule_responsible_user import execute
+
+		user = make_user("pt.dot4@example.com", "Quản lý hợp đồng")
+		doc = active(example_contract(responsible_user=user))
+		frappe.db.set_value(DT, {"contract": doc.name}, "responsible_user", None, update_modified=False)
+		self.assertTrue(all(not r.responsible_user for r in schedules(doc.name)))
+		execute()
+		self.assertTrue(all(r.responsible_user == user for r in schedules(doc.name)))
+
 
 def _hd001():
 	return make_contract(

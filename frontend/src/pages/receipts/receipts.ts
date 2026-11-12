@@ -150,6 +150,39 @@ export function ensureBlankRow(rows: AllocationForm[]): void {
   if (!rows.length || rows[rows.length - 1].schedule) rows.push(emptyAllocation())
 }
 
+/**
+ * Điền sẵn phân bổ từ query `?schedules=`. Đợt hợp lệ khi có trong `receivable` (còn nợ) và cùng khách hàng;
+ * mỗi đợt phân bổ đúng số còn nợ, số tiền phiếu = tổng còn nợ. Luôn kèm 1 dòng trống ở cuối.
+ */
+export function prefillAllocations(
+  names: string[],
+  scheduleCustomers: Record<string, string>,
+  receivable: ReceivableSchedule[],
+  customer: string,
+): { allocations: AllocationForm[]; amount: number | null; skipped: string[] } {
+  const allocations: AllocationForm[] = []
+  const skipped: string[] = []
+  let amount = 0
+  for (const name of names) {
+    const s = receivable.find((r) => r.name === name)
+    if (!s || !customer || (scheduleCustomers[name] ?? customer) !== customer || !(s.outstanding > 0)) {
+      skipped.push(name)
+      continue
+    }
+    allocations.push({
+      schedule: s.name,
+      schedule_name: s.schedule_name ?? '',
+      contract: s.contract ?? '',
+      due_date: s.due_date ?? '',
+      outstanding: s.outstanding,
+      allocated_amount: s.outstanding,
+    })
+    amount += s.outstanding
+  }
+  ensureBlankRow(allocations)
+  return { allocations, amount: amount > 0 ? amount : null, skipped }
+}
+
 export const FORM_RULES: Rules<ReceiptForm> = {
   customer: { label: 'Khách hàng', required: true },
   receipt_date: { label: 'Ngày thu', required: true },

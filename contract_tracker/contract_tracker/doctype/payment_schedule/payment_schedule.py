@@ -183,6 +183,7 @@ def build_schedules(contract) -> list[dict]:
 		common = {
 			"contract": contract.name,
 			"customer": contract.customer,
+			"responsible_user": contract.responsible_user,
 			"item_key": item.item_key,
 			"item_name": item.item_name,
 			"vat_rate": item.vat_rate,
@@ -238,6 +239,16 @@ def build_schedules(contract) -> list[dict]:
 				}
 			)
 	return result
+
+
+def sync_responsible_user(contract_name: str, user: str | None):
+	"""Đồng bộ người phụ trách của hợp đồng sang mọi đợt (kể cả đợt đã có chứng từ).
+
+	Ghi bằng db.set_value để không chạy save đợt thu.
+	"""
+	frappe.db.set_value(
+		"Payment Schedule", {"contract": contract_name}, "responsible_user", user or None, update_modified=False
+	)
 
 
 def delete_unbilled_schedules(contract_name: str):
