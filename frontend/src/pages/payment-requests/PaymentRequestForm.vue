@@ -199,7 +199,7 @@ function validate(): boolean {
   clearItemErrors()
   const ok = validateAll()
   // Đề nghị Đã gửi chỉ sửa ghi chú: các dòng đợt không kiểm tra lại (đợt có thể đã thu đủ sau khi lập).
-  const extra = locked.value ? {} : validateItems(form)
+  const extra = locked.value ? {} : validateItems(form, (doc?.doc?.items ?? []).map((i: { schedule: string }) => i.schedule))
   Object.assign(errors, extra)
   const first = Object.keys(extra)[0]
   if (ok && first) void nextTick(() => focusField(first))
