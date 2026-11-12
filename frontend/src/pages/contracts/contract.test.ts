@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cellText, checkField, computeTotals, formatCurrency } from '@/standard'
+import { cellText, checkField, computeTotals, filterTree, formatCurrency, leafKeys } from '@/standard'
 import type { Contract } from '@/types/doctypes'
 import {
   COLUMNS,
@@ -50,7 +50,13 @@ import {
   itemTotals,
   nextDueDate,
   nextDueText,
-  normalizeGroups,
+  applyClientFilters,
+  billingKindsByContract,
+  filterByTree,
+  overdueContractNames,
+  overlapsEffective,
+  shortCustomerName,
+  groupDate,
   overdueSummary,
   partyLines,
   periodBadge,
@@ -374,39 +380,221 @@ describe('toPayload / fromDoc', () => {
 describe('danh sách', () => {
   it('toFrappeFilters theo từng ô', () => {
     expect(toFrappeFilters(emptyFilters())).toEqual({})
-    const f = { ...emptyFilters(), contractNo: ' 001 ', customer: 'KH-1', responsibleUser: 'a@x.com', contractType: 'DV' }
+    const f = { ...emptyFilters(), contractNo: ' 001 ', customer: 'KH-1', responsibleUser: 'a@x.com', contractType: 'DV', status: 'Đang hiệu lực' }
     expect(toFrappeFilters(f)).toEqual({
       contract_no: ['like', '%001%'],
       customer: 'KH-1',
       responsible_user: 'a@x.com',
       contract_type: 'DV',
+      status: 'Đang hiệu lực',
     })
   })
 
-  it('nhóm trạng thái: chọn một phần, không chọn nhóm nào', () => {
-    expect(toFrappeFilters({ ...emptyFilters(), groups: ['Nháp', 'Đã hủy'] })).toEqual({ status: ['in', ['Nháp', 'Đã hủy']] })
-    expect(toFrappeFilters({ ...emptyFilters(), groups: [] })).toEqual({ name: ['in', []] })
+  it('khoảng Ngày ký và Tổng sau thuế: hai đầu, một đầu', () => {
+    expect(toFrappeFilters({ ...emptyFilters(), signedFrom: '2026-01-01', signedTo: '2026-03-31' })).toEqual({
+      signed_date: ['between', ['2026-01-01', '2026-03-31']],
+    })
+    expect(toFrappeFilters({ ...emptyFilters(), signedFrom: '2026-01-01' })).toEqual({ signed_date: ['>=', '2026-01-01'] })
+    expect(toFrappeFilters({ ...emptyFilters(), signedTo: '2026-03-31' })).toEqual({ signed_date: ['<=', '2026-03-31'] })
+    expect(toFrappeFilters({ ...emptyFilters(), totalFrom: 100_000_000, totalTo: 500_000_000 })).toEqual({
+      total_after_tax: ['between', [100_000_000, 500_000_000]],
+    })
+    expect(toFrappeFilters({ ...emptyFilters(), totalFrom: 0 })).toEqual({ total_after_tax: ['>=', 0] })
+    expect(toFrappeFilters({ ...emptyFilters(), totalTo: 5 })).toEqual({ total_after_tax: ['<=', 5] })
   })
 
-  it('filtersActive', () => {
+  it('filtersActive: từng ô, kể cả cây và trạng thái', () => {
     expect(filtersActive(emptyFilters())).toBe(false)
-    expect(filtersActive({ ...emptyFilters(), customer: 'KH-1' })).toBe(true)
-    expect(filtersActive({ ...emptyFilters(), groups: ['Nháp'] })).toBe(true)
+    const changes: Partial<ReturnType<typeof emptyFilters>>[] = [
+      { tree: ['HD-1'] },
+      { contractNo: 'x' },
+      { customer: 'KH-1' },
+      { contractType: 'DV' },
+      { status: 'Nháp' },
+      { responsibleUser: 'a' },
+      { signedFrom: '2026-01-01' },
+      { signedTo: '2026-01-01' },
+      { effectiveFrom: '2026-01-01' },
+      { effectiveTo: '2026-01-01' },
+      { totalFrom: 1 },
+      { totalTo: 1 },
+      { billingKind: 'Định kỳ' },
+      { onlyOutstanding: true },
+      { onlyOverdue: true },
+      { onlyExpiring: true },
+    ]
+    for (const c of changes) expect(filtersActive({ ...emptyFilters(), ...c })).toBe(true)
+    expect(Object.keys(emptyFilters())).toHaveLength(16)
   })
 
-  it('groupTree đếm theo trạng thái', () => {
-    const tree = groupTree([{ status: 'Nháp' }, { status: 'Nháp' }, { status: 'Đang hiệu lực' }, { status: 'Đã hủy' }])
-    expect(tree).toHaveLength(2)
-    expect(tree[1].key).toBe('expiring')
-    expect(tree[0].label).toBe('Tất cả hợp đồng')
-    expect(tree[0].count).toBe(4)
-    expect(tree[0].children?.map((c) => [c.key, c.count])).toEqual([
-      ['Nháp', 2],
-      ['Đang hiệu lực', 1],
-      ['Hết hạn', 0],
-      ['Đã thanh lý', 0],
-      ['Đã hủy', 1],
+  describe('cây 4 cấp', () => {
+    const R = (name: string, no: string, cust: string, custName: string, signed: string | null, start: string, title = 'Tên ' + no) => ({
+      name,
+      contract_no: no,
+      contract_title: title,
+      customer: cust,
+      customer_name: custName,
+      signed_date: signed,
+      start_date: start,
+    })
+    const rows = [
+      R('HD-01', 'HD-01', 'K1', 'Công ty TNHH ABC', '2026-11-05', '2026-11-10'),
+      R('HD-02', 'HD-02', 'K1', 'Công ty TNHH ABC', '2026-11-20', '2026-11-20'),
+      R('HD-03', 'HD-03', 'K2', 'Công ty CP X', '2026-03-02', '2026-03-02'),
+      R('HD-04', 'HD-04', 'K3', 'Tập đoàn Z', null, '2025-09-15'),
+    ]
+    const tree = groupTree(rows)
+
+    it('năm và tháng giảm dần, có số lượng', () => {
+      expect(tree.map((n) => [n.key, n.label, n.count])).toEqual([
+        ['y:2026', 'Năm 2026', 3],
+        ['y:2025', 'Năm 2025', 1],
+      ])
+      expect(tree[0].children?.map((m) => [m.key, m.label, m.count])).toEqual([
+        ['m:2026-11', 'Tháng 11/2026', 2],
+        ['m:2026-03', 'Tháng 03/2026', 1],
+      ])
+    })
+
+    it('signed_date trống thì xếp theo start_date', () => {
+      expect(groupDate(rows[3])).toBe('2025-09-15')
+      expect(groupDate(rows[0])).toBe('2026-11-05')
+      expect(tree[1].children?.[0].key).toBe('m:2025-09')
+    })
+
+    it('nhãn khách hàng rút gọn, title đầy đủ; nút hợp đồng chỉ ghi số HĐ', () => {
+      const cust = tree[0].children![0].children![0]
+      expect(cust).toMatchObject({ key: 'c:2026-11:K1', label: 'ABC', title: 'Công ty TNHH ABC', count: 2 })
+      expect(cust.children?.map((c) => [c.key, c.label, c.title])).toEqual([
+        ['HD-01', 'HD-01', 'HD-01 · Tên HD-01'],
+        ['HD-02', 'HD-02', 'HD-02 · Tên HD-02'],
+      ])
+      expect(tree[0].children![1].children![0].label).toBe('X')
+      expect(tree[1].children![0].children![0].label).toBe('Tập đoàn Z')
+    })
+
+    it('shortCustomerName', () => {
+      expect(shortCustomerName('Công ty TNHH ABC')).toBe('ABC')
+      expect(shortCustomerName('công ty cp  X')).toBe('X')
+      expect(shortCustomerName('Công ty Cổ phần Y')).toBe('Y')
+      expect(shortCustomerName('Tập đoàn Z')).toBe('Tập đoàn Z')
+      expect(shortCustomerName('Công ty TNHH')).toBe('Công ty TNHH')
+      expect(shortCustomerName(null)).toBe('')
+    })
+
+    it('không có nút trạng thái hay Sắp hết hạn', () => {
+      const keys = JSON.stringify(tree)
+      expect(keys).not.toContain('expiring')
+      expect(keys).not.toContain('Sắp hết hạn')
+      for (const s of STATUSES) expect(keys).not.toContain(`"key":"${s}"`)
+    })
+
+    it('ô tìm trên cây theo tên khách hàng và số hợp đồng', () => {
+      const byName = filterTree(tree, 'ABC')
+      expect(byName).toHaveLength(1)
+      expect(byName[0].children).toHaveLength(1)
+      const byNo = filterTree(tree, 'HD-02')
+      expect(byNo[0].children?.[0].children?.[0].children?.map((c) => c.key)).toEqual(['HD-02'])
+    })
+
+    it('filterByTree: tích tháng + khách hàng, tích cha, không tích gì', () => {
+      const month = tree[0].children![0]
+      const cust = month.children![0]
+      expect(filterByTree(rows, leafKeys(cust)).map((r) => r.name)).toEqual(['HD-01', 'HD-02'])
+      expect(filterByTree(rows, leafKeys(tree[0])).map((r) => r.name)).toEqual(['HD-01', 'HD-02', 'HD-03'])
+      expect(filterByTree(rows, ['HD-04']).map((r) => r.name)).toEqual(['HD-04'])
+      expect(filterByTree(rows, [])).toBe(rows)
+      const sel = filterByTree(
+        rows.map((r) => ({ ...r, status: 'Đang hiệu lực' as const, total_after_tax: 100, paid_amount: 0, outstanding_amount: 100, end_date: null })),
+        leafKeys(cust),
+      )
+      expect(statCards(sel, null, '2026-11-12')[1].value).toBe(formatCurrency(200))
+    })
+  })
+
+  describe('lọc ở client', () => {
+    const TODAY = '2026-11-12'
+    const rows = [
+      { name: 'A', status: 'Đang hiệu lực', start_date: '2026-01-01', end_date: '2026-12-31' },
+      { name: 'B', status: 'Đang hiệu lực', start_date: '2026-01-01', end_date: '2026-11-12' },
+      { name: 'C', status: 'Đang hiệu lực', start_date: '2026-01-01', end_date: '2026-12-12' },
+      { name: 'D', status: 'Đang hiệu lực', start_date: '2026-01-01', end_date: '2026-12-13' },
+      { name: 'E', status: 'Nháp', start_date: '2027-01-01', end_date: null },
+      { name: 'F', status: 'Đã hủy', start_date: '2026-01-01', end_date: '2026-06-01' },
+    ]
+    const names = (f: Partial<ReturnType<typeof emptyFilters>>, ctx = {}) =>
+      applyClientFilters(rows, { ...emptyFilters(), ...f }, { overdue: null, kinds: null, today: TODAY, ...ctx }).map((r) => r.name)
+
+    it('overlapsEffective', () => {
+      const r = { start_date: '2026-03-01', end_date: '2026-06-30' }
+      expect(overlapsEffective(r, '2026-06-30', '2026-08-01')).toBe(true)
+      expect(overlapsEffective(r, '2026-07-01', '2026-08-01')).toBe(false)
+      expect(overlapsEffective(r, '2026-01-01', '2026-03-01')).toBe(true)
+      expect(overlapsEffective(r, '2026-01-01', '2026-02-28')).toBe(false)
+      expect(overlapsEffective({ start_date: '2026-03-01', end_date: null }, '2030-01-01', '')).toBe(true)
+      expect(overlapsEffective(r, '', '2026-02-01')).toBe(false)
+      expect(overlapsEffective(r, '2026-07-01', '')).toBe(false)
+      expect(overlapsEffective(r, '', '')).toBe(true)
+    })
+
+    it('hiệu lực trong khoảng', () => {
+      expect(names({ effectiveFrom: '2026-12-20', effectiveTo: '2026-12-31' })).toEqual(['A'])
+      expect(names({ effectiveFrom: '2027-06-01' })).toEqual(['E'])
+    })
+
+    it('sắp hết hạn trong 30 ngày: biên hôm nay và +30', () => {
+      expect(names({ onlyExpiring: true })).toEqual(['B', 'C'])
+    })
+
+    it('đợt quá hạn: loại Nháp, Đã hủy, nguồn null thì không lọc', () => {
+      const sch = [
+        { contract: 'A', due_date: '2026-11-01', total_amount: 100, paid_amount: 40 },
+        { contract: 'B', due_date: '2026-11-01', total_amount: 100, paid_amount: 100 },
+        { contract: 'C', due_date: '2026-11-12', total_amount: 100, paid_amount: 0 },
+        { contract: 'E', due_date: '2026-10-01', total_amount: 100, paid_amount: 0 },
+        { contract: 'F', due_date: '2026-10-01', total_amount: 100, paid_amount: 0 },
+      ]
+      const overdue = overdueContractNames(sch, TODAY)
+      expect([...overdue].sort()).toEqual(['A', 'E', 'F'])
+      expect(names({ onlyOverdue: true }, { overdue })).toEqual(['A'])
+      expect(names({ onlyOverdue: true })).toHaveLength(rows.length)
+    })
+
+    it('kiểu thu', () => {
+      const kinds = billingKindsByContract([
+        { name: 'A', billing_type: 'Một lần' },
+        { name: 'A', billing_type: 'Định kỳ' },
+        { name: 'B', billing_type: 'Định kỳ' },
+        { name: 'C', billing_type: 'Nhiều đợt' },
+        { name: 'D', billing_type: null },
+      ])
+      expect(names({ billingKind: 'Định kỳ' }, { kinds })).toEqual(['A', 'B'])
+      expect(names({ billingKind: 'Một lần' }, { kinds })).toEqual(['A'])
+      expect(names({ billingKind: 'Một lần' })).toHaveLength(rows.length)
+    })
+  })
+
+  it('cột: nhóm tiêu đề 2 cấp, không còn (VND) ở nhãn cột, không còn _effective', () => {
+    const by = Object.fromEntries(COLUMNS.map((c) => [c.key, c]))
+    expect(COLUMNS.filter((c) => c.group).map((c) => [c.key, c.group])).toEqual([
+      ['start_date', 'Hiệu lực'],
+      ['end_date', 'Hiệu lực'],
+      ['total_before_tax', 'Tiền (VND)'],
+      ['total_after_tax', 'Tiền (VND)'],
+      ['paid_amount', 'Tiền (VND)'],
+      ['outstanding_amount', 'Tiền (VND)'],
     ])
+    expect(COLUMNS.every((c) => !c.label.includes('(VND)'))).toBe(true)
+    expect(by._effective).toBeUndefined()
+    expect(by.total_before_tax.hidden).toBe(true)
+    for (const k of ['start_date', 'end_date']) {
+      expect(by[k].type).toBe('date')
+      expect(by[k].sortable).not.toBe(false)
+      expect(by[k].width).toBeGreaterThanOrEqual(110)
+      expect(by[k].width).toBeLessThanOrEqual(120)
+    }
+    for (const k of ['total_before_tax', 'total_after_tax', 'paid_amount', 'outstanding_amount']) expect(by[k].sum).toBe(true)
+    expect(COLUMNS.filter((c) => !c.hidden).reduce((a, c) => a + c.width, 0)).toBeLessThanOrEqual(1300)
   })
 
   it('cột: STT và số hợp đồng ghim trái, thao tác ghim phải, các cột tiền có dòng Tổng kể cả Đã thu và Còn phải thu', () => {
@@ -418,7 +606,8 @@ describe('danh sách', () => {
     expect(byKey.total_after_tax.sum).toBe(true)
     expect(byKey.paid_amount.sum).toBe(true)
     expect(byKey.outstanding_amount.sum).toBe(true)
-    expect(byKey.outstanding_amount.label).toBe('Còn phải thu (VND)')
+    expect(byKey.outstanding_amount.label).toBe('Còn phải thu')
+    expect(byKey.outstanding_amount.group).toBe('Tiền (VND)')
   })
 
   it('dòng Tổng của cột Còn phải thu bằng tổng các dòng đang hiển thị', () => {
@@ -614,22 +803,23 @@ describe('danh sách hợp đồng (ticket A)', () => {
       'Số hợp đồng',
       'Khách hàng / Nội dung',
       'Trạng thái',
-      'Hiệu lực',
-      'Tổng sau thuế (VND)',
-      'Đã thu (VND)',
-      'Còn phải thu (VND)',
+      'Từ ngày',
+      'Đến ngày',
+      'Tổng sau thuế',
+      'Đã thu',
+      'Còn phải thu',
       'Phụ trách',
       'Thao tác',
     ])
     expect(shown[0].pin).toBe('left')
     expect(shown[1].pin).toBe('left')
     expect(shown[shown.length - 1].pin).toBe('right')
-    expect(shown.reduce((a, c) => a + c.width, 0)).toBeLessThanOrEqual(1320)
+    expect(shown.reduce((a, c) => a + c.width, 0)).toBe(1300)
   })
 
   it('ba cột ẩn mặc định; ba cột tiền và Giá trị trước thuế được cộng', () => {
     const hidden = COLUMNS.filter((c) => c.hidden).map((c) => c.label)
-    expect(hidden.sort()).toEqual(['Giá trị trước thuế (VND)', 'Loại hợp đồng', 'Ngày ký'].sort())
+    expect(hidden.sort()).toEqual(['Giá trị trước thuế', 'Loại hợp đồng', 'Ngày ký'].sort())
     const rows = [1, 2, 3, 4, 5].map((n) => ({
       total_before_tax: n * 100,
       total_after_tax: n * 110,
@@ -731,28 +921,15 @@ describe('danh sách hợp đồng (ticket A)', () => {
     expect(nextDueText('2026-11-30')).toBe('30/11/2026')
   })
 
-  it('nút Sắp hết hạn: bộ lọc, normalizeGroups, cây nhóm', () => {
-    const f = { ...emptyFilters(), groups: ['expiring'] }
-    expect(toFrappeFilters(f, TODAY)).toEqual({ status: 'Đang hiệu lực', end_date: ['between', ['2026-11-12', '2026-12-12']] })
+  it('ô "Sắp hết hạn trong 30 ngày" chỉ lọc ở client, không gửi server', () => {
+    const f = { ...emptyFilters(), onlyExpiring: true }
+    expect(toFrappeFilters(f)).toEqual({})
     expect(filtersActive(f)).toBe(true)
-    expect(normalizeGroups(['Nháp', 'Hết hạn', 'expiring'], ['Nháp', 'Hết hạn'])).toEqual(['expiring'])
-    expect(normalizeGroups(['expiring', 'Nháp'], ['expiring'])).toEqual(['Nháp'])
-    expect(normalizeGroups(['Nháp'], ['Nháp', 'Hết hạn'])).toEqual(['Nháp'])
-    const tree = groupTree(
-      [
-        { status: 'Đang hiệu lực', end_date: '2026-11-20' },
-        { status: 'Đang hiệu lực', end_date: '2027-01-01' },
-        { status: 'Nháp', end_date: '2026-11-20' },
-      ],
-      TODAY,
-    )
-    expect(tree[0].count).toBe(3)
-    expect(tree[1]).toMatchObject({ key: 'expiring', label: 'Sắp hết hạn', count: 1 })
   })
 
   it('ô "Chỉ hợp đồng còn phải thu"', () => {
     expect(emptyFilters().onlyOutstanding).toBe(false)
-    expect(toFrappeFilters({ ...emptyFilters(), onlyOutstanding: true }, TODAY)).toEqual({ outstanding_amount: ['>', 0] })
+    expect(toFrappeFilters({ ...emptyFilters(), onlyOutstanding: true })).toEqual({ outstanding_amount: ['>', 0] })
     expect(filtersActive({ ...emptyFilters(), onlyOutstanding: true })).toBe(true)
   })
 

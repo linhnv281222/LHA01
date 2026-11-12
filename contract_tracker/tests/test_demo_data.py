@@ -91,6 +91,35 @@ class TestDemoDataSeed(IntegrationTestCase):
 		)
 		self.assertTrue(soon)
 
+	def test_tree_and_filter_scenarios(self):
+		rows = frappe.get_all(
+			"Contract",
+			filters={"name": ["like", "MAU-%"]},
+			fields=["name", "customer", "signed_date", "start_date", "status"],
+		)
+		group_dates = [getdate(r.signed_date or r.start_date) for r in rows]
+		self.assertGreaterEqual(len({d.year for d in group_dates}), 2)
+		self.assertGreaterEqual(len({(d.year, d.month) for d in group_dates}), 3)
+		self.assertGreaterEqual(len({r.customer for r in rows}), 3)
+		# Có hợp đồng thiếu ngày ký (xếp theo ngày bắt đầu).
+		self.assertTrue([r for r in rows if not r.signed_date])
+		# Có hợp đồng Đang hiệu lực hết hạn trong 30 ngày.
+		soon = frappe.get_all(
+			"Contract",
+			filters={"name": ["like", "MAU-%"], "status": "Đang hiệu lực", "end_date": ["between", [today(), add_days(today(), 30)]]},
+		)
+		self.assertTrue(soon)
+		# Có đợt quá hạn còn thiếu tiền ở hợp đồng không phải Nháp hay Đã hủy.
+		valid = [r.name for r in rows if r.status not in ("Nháp", "Đã hủy")]
+		overdue = frappe.get_all(
+			"Payment Schedule",
+			filters={"contract": ["in", valid], "due_date": ["<", today()]},
+			fields=["total_amount", "paid_amount"],
+		)
+		self.assertTrue([s for s in overdue if s.paid_amount < s.total_amount])
+		# Có hạng mục Một lần và Định kỳ.
+		self.assertTrue({"Một lần", "Định kỳ"} <= {i.billing_type for i in self._items()})
+
 	def test_billing_types_and_vat(self):
 		items = self._items()
 		self.assertEqual({i.billing_type for i in items}, {"Một lần", "Nhiều đợt", "Định kỳ"})
