@@ -32,8 +32,13 @@ import {
   collectedPercent,
   detailFields,
   detailTitle,
-  effectiveText,
+  BILLING_KIND_OPTIONS,
+  ITEM_KIND_LIMIT,
+  STATUSES,
+  applyClientFilters,
+  billingKindsByContract,
   emptyFilters,
+  filterByTree,
   filtersActive,
   groupTree,
   installmentText,
@@ -41,11 +46,10 @@ import {
   itemTotals,
   nextDueDate,
   nextDueText,
-  normalizeGroups,
+  overdueContractNames,
   overdueScheduleFilters,
   partyLines,
   periodBadge,
-  remainingText,
   statCards,
   statusOf,
   toFrappeFilters,
@@ -91,7 +95,23 @@ const list = useList<Contract>({
   orderBy: 'modified desc',
   limit: 5000,
 })
-const allForTree = useList<Contract>({ doctype: DOCTYPE, fields: ['name', 'status', 'end_date'], limit: 5000 })
+const allForTree = useList<Contract>({
+  doctype: DOCTYPE,
+  fields: ['name', 'contract_no', 'contract_title', 'customer', 'customer_name', 'signed_date', 'start_date'],
+  limit: 5000,
+})
+// Kiểu thu của hạng mục, đọc theo lô một lần (nhiều dòng cho mỗi hợp đồng), không gọi theo từng hợp đồng.
+const itemKinds = useList<{ name: string; billing_type: string }>({
+  doctype: DOCTYPE,
+  fields: ['name', 'items.billing_type as billing_type'],
+  limit: ITEM_KIND_LIMIT,
+})
+const kindsByContract = computed(() => {
+  const data = itemKinds.data
+  if (itemKinds.error || itemKinds.loading || !data || data.length >= ITEM_KIND_LIMIT) return null
+  return billingKindsByContract(data)
+})
+const statusOptions: SelectOption[] = STATUSES.map((s) => ({ label: s, value: s }))
 
 // Lựa chọn cho các ô lọc.
 const customers = useList<ContractCustomer>({ doctype: 'Contract Customer', fields: ['name', 'customer_name'], orderBy: 'customer_name asc', limit: 5000 })
@@ -104,17 +124,14 @@ const userOptions = computed<SelectOption[]>(() =>
 )
 
 const rows = computed(() => list.data ?? [])
-const card = ref<string | null>(null)
-const tableRows = computed(() => (card.value ? rows.value.filter((r) => r.status === card.value) : rows.value))
-
-// Tích "Sắp hết hạn" thì bỏ các trạng thái; tích lại trạng thái thì bỏ "Sắp hết hạn".
-watch(
-  () => draft.value.groups,
-  (next, prev) => {
-    const v = normalizeGroups(next, prev ?? [])
-    if (v !== next) draft.value.groups = v
+// Thẻ "Đang hiệu lực" và ô Trạng thái cùng điều khiển một giá trị (applied.status).
+const activeCard = computed<string | null>({
+  get: () => applied.value.status || null,
+  set: (v) => {
+    draft.value.status = v ?? ''
+    applied.value = { ...applied.value, status: v ?? '' }
   },
-)
+})
 
 // "Hôm nay" tính một lần khi mở trang.
 const today = todayStr()
@@ -129,14 +146,25 @@ const overdue = useList<ContractSchedule & { name: string }>({
 })
 const overdueRows = computed(() => usableSchedules(overdue.data, !!overdue.error, overdue.loading))
 const overdueTruncated = computed(() => !overdue.error && !overdue.loading && (overdue.data?.length ?? 0) >= SCHEDULE_LIMIT)
-const cards = computed<StatCard[]>(() => statCards(rows.value, overdueRows.value, today))
+const overdueNames = computed(() => (overdueRows.value ? overdueContractNames(overdueRows.value, today) : null))
+const kindFailed = computed(() => !!itemKinds.error || (!itemKinds.loading && (itemKinds.data?.length ?? 0) >= ITEM_KIND_LIMIT))
+
+// Một tập chung cho bảng, thẻ số liệu và dòng Tổng: lọc server → lọc client → nút cây.
+const tableRows = computed(() =>
+  filterByTree(
+    applyClientFilters(rows.value, applied.value, { overdue: overdueNames.value, kinds: kindsByContract.value, today }),
+    applied.value.tree,
+  ),
+)
+const cards = computed<StatCard[]>(() => statCards(tableRows.value, overdueRows.value, today))
+const overdueUnusable = computed(() => applied.value.onlyOverdue && overdueRows.value === null && !overdue.loading)
+const kindUnusable = computed(() => !!applied.value.billingKind && kindFailed.value)
 
 function search() {
   applied.value = JSON.parse(JSON.stringify(draft.value)) as PanelFilters
 }
 function clearAll() {
   draft.value = emptyFilters()
-  card.value = null
   search()
 }
 
@@ -201,15 +229,31 @@ function exportExcel() {
 <template>
   <SplitLayout :searching="list.loading" @search="search">
     <template #group>
-      <GroupTree v-model="draft.groups" :nodes="groupTree(allForTree.data ?? [], today)" />
+      <GroupTree v-model="draft.tree" :nodes="groupTree(allForTree.data ?? [])" search-placeholder="Tìm khách hàng, số hợp đồng" />
     </template>
     <template #filters>
       <FnField v-model="draft.contractNo" field="f-contract-no" label="Số hợp đồng" />
       <FnField v-model="draft.customer" field="f-customer" label="Khách hàng" type="select" :options="customerOptions" />
-      <FnField v-model="draft.responsibleUser" field="f-responsible" label="Người phụ trách" type="select" :options="userOptions" />
       <FnField v-model="draft.contractType" field="f-contract-type" label="Loại hợp đồng" type="select" :options="typeOptions" />
+      <FnField v-model="draft.status" field="f-status" label="Trạng thái" type="select" :options="statusOptions" />
+      <FnField v-model="draft.responsibleUser" field="f-responsible" label="Người phụ trách" type="select" :options="userOptions" />
+      <div class="grid grid-cols-2 gap-2">
+        <FnField v-model="draft.signedFrom" field="f-signed-from" label="Ngày ký từ" type="date" />
+        <FnField v-model="draft.signedTo" field="f-signed-to" label="Đến ngày" type="date" />
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <FnField v-model="draft.effectiveFrom" field="f-effective-from" label="Hiệu lực từ" type="date" />
+        <FnField v-model="draft.effectiveTo" field="f-effective-to" label="Đến ngày" type="date" />
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <FnField v-model="draft.totalFrom" field="f-total-from" label="Tổng sau thuế từ (VND)" type="currency" />
+        <FnField v-model="draft.totalTo" field="f-total-to" label="Đến (VND)" type="currency" />
+      </div>
+      <FnField v-model="draft.billingKind" field="f-billing-kind" label="Kiểu thu" type="select" :options="BILLING_KIND_OPTIONS" />
       <FnField v-model="draft.onlyOutstanding" field="f-only-outstanding" label="Chỉ hợp đồng còn phải thu" type="checkbox" />
-      <button type="button" class="text-base text-ink-blue-link hover:underline" @click="clearAll">Xóa bộ lọc</button>
+      <FnField v-model="draft.onlyOverdue" field="f-only-overdue" label="Có đợt quá hạn chưa thu đủ" type="checkbox" />
+      <FnField v-model="draft.onlyExpiring" field="f-only-expiring" label="Sắp hết hạn trong 30 ngày" type="checkbox" />
+      <button type="button" class="text-base text-ink-blue-link hover:underline" @click="clearAll">Xóa lọc</button>
     </template>
 
     <PageTitle title="Hợp đồng" :count="tableRows.length" :subtitle="`${tableRows.length} hợp đồng`">
@@ -219,7 +263,7 @@ function exportExcel() {
       </template>
     </PageTitle>
 
-    <StatCards v-model:active="card" :cards="cards" />
+    <StatCards v-model:active="activeCard" :cards="cards" />
 
     <p v-if="list.error" class="rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-base text-ink-red-7" role="alert">
       Không tải được danh sách: {{ list.error.message }}
@@ -233,6 +277,14 @@ function exportExcel() {
     <p v-else-if="overdueTruncated" class="rounded-4 border border-outline-amber-3 bg-surface-amber-2 px-3 py-2 text-base text-ink-amber-7" role="alert">
       Có quá nhiều đợt quá hạn nên chưa tính được số đợt quá hạn. Hãy lọc bớt hợp đồng rồi thử lại.
     </p>
+    <p v-if="overdueUnusable" class="rounded-4 border border-outline-amber-3 bg-surface-amber-2 px-3 py-2 text-base text-ink-amber-7" role="alert">
+      Chưa lọc được theo "Có đợt quá hạn chưa thu đủ" vì lịch thu chưa tải đủ. Bấm Thử lại hoặc lọc bớt hợp đồng.
+      <button type="button" class="ml-2 underline" @click="overdue.reload()">Thử lại</button>
+    </p>
+    <p v-if="kindUnusable" class="rounded-4 border border-outline-amber-3 bg-surface-amber-2 px-3 py-2 text-base text-ink-amber-7" role="alert">
+      Chưa lọc được theo Kiểu thu vì chưa tải đủ hạng mục. Bấm Thử lại hoặc lọc bớt hợp đồng.
+      <button type="button" class="ml-2 underline" @click="itemKinds.reload()">Thử lại</button>
+    </p>
     <p v-if="schedules.error" class="rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-base text-ink-red-7" role="alert">
       Không tải được lịch thu của hợp đồng đang chọn: {{ schedules.error.message }}
       <button type="button" class="ml-2 underline" @click="schedules.reload()">Thử lại</button>
@@ -244,7 +296,7 @@ function exportExcel() {
       :columns="COLUMNS"
       :rows="tableRows"
       :loading="list.loading"
-      :external-filter-active="filtersActive(applied) || card !== null"
+      :external-filter-active="filtersActive(applied)"
       caption="Bấm một dòng để xem chi tiết. Chưa có hợp đồng? Bấm Thêm hợp đồng để tạo."
       @clear-filters="clearAll"
     >
@@ -252,14 +304,6 @@ function exportExcel() {
         <div class="min-w-0">
           <div class="truncate text-base-semibold text-ink-gray-9">{{ partyLines(row).top }}</div>
           <div class="truncate text-sm text-ink-gray-5">{{ partyLines(row).bottom }}</div>
-        </div>
-      </template>
-      <template #cell-_effective="{ row }">
-        <div>
-          <div class="whitespace-nowrap text-base text-ink-gray-8">{{ effectiveText(row) }}</div>
-          <div class="text-sm" :class="(row.end_date ?? '9999') < today ? 'text-ink-red-7' : 'text-ink-gray-5'">
-            {{ remainingText(row.end_date, today) }}
-          </div>
         </div>
       </template>
       <template #cell-outstanding_amount="{ row }">

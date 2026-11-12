@@ -75,7 +75,6 @@ export function fmt(template: string, ...args: (string | number)[]): string {
 
 // ---- Danh sách ----
 
-export const EXPIRING_KEY = 'expiring'
 export const EXPIRING_DAYS = 30
 /** Sai số khi so sánh tiền (cùng mức với milestoneSummary). */
 export const MONEY_EPS = 0.01
@@ -103,25 +102,26 @@ export function usableSchedules<T>(
 
 export const COLUMNS: Column<Contract>[] = [
   { key: '_index', label: 'STT', width: 48, type: 'index', pin: 'left' },
-  { key: 'contract_no', label: 'Số hợp đồng', width: 120, pin: 'left', required: true },
-  { key: '_party', label: 'Khách hàng / Nội dung', width: 230, format: (r) => r.customer_name ?? '' },
+  { key: 'contract_no', label: 'Số hợp đồng', width: 115, pin: 'left', required: true },
+  { key: '_party', label: 'Khách hàng / Nội dung', width: 215, format: (r) => r.customer_name ?? '' },
   { key: 'contract_type_name', label: 'Loại hợp đồng', width: 170, hidden: true },
   {
     key: 'status',
     label: 'Trạng thái',
-    width: 140,
+    width: 130,
     type: 'status',
     status: statusOf,
     filter: 'select',
     options: STATUSES.map((s) => ({ label: s, value: s })),
   },
   { key: 'signed_date', label: 'Ngày ký', width: 120, type: 'date', hidden: true },
-  { key: '_effective', label: 'Hiệu lực', width: 170, format: (r) => effectiveText(r) },
-  { key: 'total_before_tax', label: 'Giá trị trước thuế (VND)', width: 160, type: 'currency', sum: true, hidden: true },
-  { key: 'total_after_tax', label: 'Tổng sau thuế (VND)', width: 140, type: 'currency', sum: true },
-  { key: 'paid_amount', label: 'Đã thu (VND)', width: 140, type: 'currency', sum: true },
-  { key: 'outstanding_amount', label: 'Còn phải thu (VND)', width: 140, type: 'currency', sum: true },
-  { key: 'responsible_name', label: 'Phụ trách', width: 120 },
+  { key: 'start_date', label: 'Từ ngày', width: 110, type: 'date', group: 'Hiệu lực' },
+  { key: 'end_date', label: 'Đến ngày', width: 110, type: 'date', group: 'Hiệu lực' },
+  { key: 'total_before_tax', label: 'Giá trị trước thuế', width: 150, type: 'currency', sum: true, hidden: true, group: 'Tiền (VND)' },
+  { key: 'total_after_tax', label: 'Tổng sau thuế', width: 130, type: 'currency', sum: true, group: 'Tiền (VND)' },
+  { key: 'paid_amount', label: 'Đã thu', width: 130, type: 'currency', sum: true, group: 'Tiền (VND)' },
+  { key: 'outstanding_amount', label: 'Còn phải thu', width: 130, type: 'currency', sum: true, group: 'Tiền (VND)' },
+  { key: 'responsible_name', label: 'Phụ trách', width: 110 },
   { key: '_actions', label: 'Thao tác', width: 72, pin: 'right', sortable: false, filter: 'none', required: true },
 ]
 
@@ -185,6 +185,16 @@ export const SCHEDULE_LIST_FIELDS: (keyof ContractSchedule)[] = ['name', 'contra
 export const shortfall = (s: Pick<ContractSchedule, 'total_amount' | 'paid_amount'>): number =>
   Math.max(0, Number(s.total_amount ?? 0) - Number(s.paid_amount ?? 0))
 
+/** Một đợt quá hạn: hợp đồng có trạng thái và không phải Nháp/Đã hủy, due_date < hôm nay, còn thiếu tiền. */
+export function isOverdueSchedule(
+  s: ContractSchedule,
+  status: string | null | undefined,
+  today: string = todayStr(),
+): boolean {
+  if (!status || status === 'Nháp' || status === 'Đã hủy') return false
+  return !!s.due_date && s.due_date < today && shortfall(s) > MONEY_EPS
+}
+
 /** Đợt quá hạn: due_date < hôm nay và còn thiếu; chỉ hợp đồng có trong `statusByContract` và không phải Nháp/Đã hủy. */
 export function overdueSummary(
   schedules: ContractSchedule[],
@@ -195,8 +205,7 @@ export function overdueSummary(
   let amount = 0
   for (const s of schedules) {
     const status = s.contract ? statusByContract[s.contract] : undefined
-    if (!status || status === 'Nháp' || status === 'Đã hủy') continue
-    if (!s.due_date || s.due_date >= today || shortfall(s) <= MONEY_EPS) continue
+    if (!isOverdueSchedule(s, status, today)) continue
     count += 1
     amount += shortfall(s)
   }
@@ -257,79 +266,229 @@ export function statCards(
   ]
 }
 
-/** Cây "Truy vấn nhóm": Tất cả hợp đồng → từng trạng thái; thêm nút gốc "Sắp hết hạn" (không cộng vào "Tất cả"). */
-export function groupTree(rows: Pick<Contract, 'status' | 'end_date'>[], today: string = todayStr()): TreeNode[] {
-  return [
-    {
-      key: 'all',
-      label: 'Tất cả hợp đồng',
-      icon: 'lucide-layers',
-      count: rows.length,
-      children: STATUSES.map((s) => ({
-        key: s,
-        label: s,
-        icon: CONTRACT_STATUS[s].icon,
-        count: rows.filter((r) => (r.status ?? 'Nháp') === s).length,
-      })),
-    },
-    {
-      key: EXPIRING_KEY,
-      label: 'Sắp hết hạn',
-      icon: 'lucide-alarm-clock',
-      count: rows.filter((r) => isExpiringSoon(r, today)).length,
-    },
-  ]
+// ---- Cây "Truy vấn nhóm": Năm → Tháng → Khách hàng → Hợp đồng ----
+
+export type TreeRow = Pick<Contract, 'name' | 'contract_no' | 'contract_title' | 'customer' | 'customer_name' | 'signed_date' | 'start_date'>
+
+/** Ngày xếp nhóm: ngày ký, trống thì ngày bắt đầu. */
+export const groupDate = (r: Pick<Contract, 'signed_date' | 'start_date'>): string => r.signed_date || r.start_date || ''
+
+const NO_DATE_KEY = 'y:none'
+
+/** Bỏ tiền tố "Công ty TNHH / CP / Cổ phần" ở đầu tên; bỏ xong rỗng thì giữ tên gốc. */
+export function shortCustomerName(name: string | null | undefined): string {
+  const full = (name ?? '').trim()
+  const short = full.replace(/^công ty\s+(tnhh|cp|cổ phần)\b\s*/i, '').trim()
+  return short || full
 }
 
-/** Tích "Sắp hết hạn" thì bỏ mọi trạng thái; tích lại một trạng thái thì bỏ "Sắp hết hạn". */
-export function normalizeGroups(next: string[], prev: string[]): string[] {
-  if (!next.includes(EXPIRING_KEY)) return next
-  if (!prev.includes(EXPIRING_KEY)) return [EXPIRING_KEY]
-  const added = next.filter((k) => k !== EXPIRING_KEY && !prev.includes(k))
-  return added.length ? next.filter((k) => k !== EXPIRING_KEY) : next
+const byLabel = (a: TreeNode, b: TreeNode) => a.label.localeCompare(b.label, 'vi', { numeric: true })
+
+/** Cây 4 cấp. Khóa nút lá là name của hợp đồng; năm và tháng mới nhất ở trên. */
+export function groupTree(rows: TreeRow[]): TreeNode[] {
+  const years = new Map<string, Map<string, TreeRow[]>>()
+  for (const r of rows) {
+    const d = groupDate(r)
+    const ym = /^\d{4}-\d{2}/.test(d) ? d.slice(0, 7) : ''
+    const y = ym ? ym.slice(0, 4) : ''
+    if (!years.has(y)) years.set(y, new Map())
+    const months = years.get(y)!
+    months.set(ym, [...(months.get(ym) ?? []), r])
+  }
+  const monthNode = (ym: string, list: TreeRow[]): TreeNode => {
+    const byCustomer = new Map<string, TreeRow[]>()
+    for (const r of list) {
+      const c = r.customer || r.customer_name || ''
+      byCustomer.set(c, [...(byCustomer.get(c) ?? []), r])
+    }
+    const customers: TreeNode[] = [...byCustomer.entries()].map(([c, items]) => ({
+      key: `c:${ym}:${c}`,
+      label: shortCustomerName(items[0].customer_name || c),
+      title: items[0].customer_name || c,
+      icon: 'lucide-building-2',
+      count: items.length,
+      children: items
+        .map<TreeNode>((r) => ({
+          key: r.name,
+          label: r.contract_no,
+          title: r.contract_title ? `${r.contract_no} · ${r.contract_title}` : r.contract_no,
+          icon: 'lucide-file-text',
+          count: 1,
+        }))
+        .sort(byLabel),
+    }))
+    customers.sort(byLabel)
+    return {
+      key: `m:${ym}`,
+      label: `Tháng ${ym.slice(5)}/${ym.slice(0, 4)}`,
+      icon: 'lucide-calendar-days',
+      count: list.length,
+      children: customers,
+    }
+  }
+  const nodes: TreeNode[] = [...years.entries()]
+    .filter(([y]) => y)
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([y, months]) => {
+      const children = [...months.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([ym, list]) => monthNode(ym, list))
+      return { key: `y:${y}`, label: `Năm ${y}`, icon: 'lucide-calendar', count: children.reduce((a, c) => a + (c.count ?? 0), 0), children }
+    })
+  const none = years.get('')?.get('')
+  if (none?.length) {
+    const m = monthNode('none', none)
+    nodes.push({ key: NO_DATE_KEY, label: 'Không có ngày', icon: 'lucide-calendar', count: none.length, children: m.children })
+  }
+  return nodes
 }
+
+/** Không tích nút nào thì giữ hết; ngược lại chỉ giữ hợp đồng có name trong tập khóa lá đang tích. */
+export function filterByTree<T extends { name: string }>(rows: T[], keys: string[]): T[] {
+  if (!keys.length) return rows
+  const set = new Set(keys)
+  return rows.filter((r) => set.has(r.name))
+}
+
+// ---- Bộ lọc chi tiết ----
+
+export type BillingKind = '' | 'Một lần' | 'Định kỳ'
+
+export const BILLING_KIND_OPTIONS: { label: string; value: 'Một lần' | 'Định kỳ' }[] = [
+  { label: 'Có hạng mục một lần', value: 'Một lần' },
+  { label: 'Có hạng mục định kỳ', value: 'Định kỳ' },
+]
+
+/** Số hạng mục đọc một lần; chạm mức này thì coi là chưa đủ dữ liệu. */
+export const ITEM_KIND_LIMIT = 5000
 
 export interface PanelFilters {
-  groups: string[]
+  tree: string[]
   contractNo: string
   customer: string
-  responsibleUser: string
   contractType: string
+  status: string
+  responsibleUser: string
+  signedFrom: string
+  signedTo: string
+  effectiveFrom: string
+  effectiveTo: string
+  totalFrom: number | null
+  totalTo: number | null
+  billingKind: BillingKind
   onlyOutstanding: boolean
+  onlyOverdue: boolean
+  onlyExpiring: boolean
 }
 
 export function emptyFilters(): PanelFilters {
-  return { groups: [...STATUSES], contractNo: '', customer: '', responsibleUser: '', contractType: '', onlyOutstanding: false }
+  return {
+    tree: [],
+    contractNo: '',
+    customer: '',
+    contractType: '',
+    status: '',
+    responsibleUser: '',
+    signedFrom: '',
+    signedTo: '',
+    effectiveFrom: '',
+    effectiveTo: '',
+    totalFrom: null,
+    totalTo: null,
+    billingKind: '',
+    onlyOutstanding: false,
+    onlyOverdue: false,
+    onlyExpiring: false,
+  }
+}
+
+/** Khoảng "từ - đến" gồm hai đầu; chỉ một đầu thì chỉ áp một vế. */
+function range<T extends string | number>(from: T | '' | null, to: T | '' | null): [string, unknown] | null {
+  const hasFrom = from !== '' && from !== null
+  const hasTo = to !== '' && to !== null
+  if (hasFrom && hasTo) return ['between', [from, to]]
+  if (hasFrom) return ['>=', from]
+  if (hasTo) return ['<=', to]
+  return null
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function toFrappeFilters(f: PanelFilters, today: string = todayStr()): Record<string, any> {
+export function toFrappeFilters(f: PanelFilters): Record<string, any> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filters: Record<string, any> = {}
-  if (f.groups.includes(EXPIRING_KEY)) {
-    const { from, to } = expiringRange(today)
-    filters.status = 'Đang hiệu lực'
-    filters.end_date = ['between', [from, to]]
-  } else if (f.groups.length === 0) filters.name = ['in', []]
-  else if (f.groups.length < STATUSES.length) filters.status = ['in', f.groups]
   if (f.contractNo.trim()) filters.contract_no = ['like', `%${f.contractNo.trim()}%`]
   if (f.customer) filters.customer = f.customer
-  if (f.responsibleUser) filters.responsible_user = f.responsibleUser
   if (f.contractType) filters.contract_type = f.contractType
+  if (f.status) filters.status = f.status
+  if (f.responsibleUser) filters.responsible_user = f.responsibleUser
+  const signed = range(f.signedFrom, f.signedTo)
+  if (signed) filters.signed_date = signed
+  const total = range(f.totalFrom, f.totalTo)
+  if (total) filters.total_after_tax = total
   if (f.onlyOutstanding) filters.outstanding_amount = ['>', 0]
   return filters
 }
 
+/** Hiệu lực giao với khoảng: start_date <= đến và end_date >= từ; chưa có end_date là còn hiệu lực mãi. */
+export function overlapsEffective(
+  row: { start_date?: string | null; end_date?: string | null },
+  from: string,
+  to: string,
+): boolean {
+  if (to && !(row.start_date && row.start_date <= to)) return false
+  if (from && row.end_date && row.end_date < from) return false
+  return true
+}
+
+/** Gom kiểu thu theo hợp đồng từ các dòng (name, billing_type) đọc theo lô. */
+export function billingKindsByContract(
+  rows: { name: string; billing_type?: string | null }[] | null | undefined,
+): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>()
+  for (const r of rows ?? []) {
+    if (!r.billing_type) continue
+    if (!map.has(r.name)) map.set(r.name, new Set())
+    map.get(r.name)!.add(r.billing_type)
+  }
+  return map
+}
+
+/** Tên các hợp đồng có ít nhất một đợt quá hạn còn thiếu tiền (Nháp/Đã hủy được loại ở applyClientFilters). */
+export function overdueContractNames(schedules: ContractSchedule[], today: string = todayStr()): Set<string> {
+  const names = new Set<string>()
+  for (const s of schedules) {
+    if (s.contract && s.due_date && s.due_date < today && shortfall(s) > MONEY_EPS) names.add(s.contract)
+  }
+  return names
+}
+
+export interface ClientFilterContext {
+  /** null = chưa có dữ liệu (lỗi, đang tải, chạm giới hạn): bỏ qua điều kiện. */
+  overdue: Set<string> | null
+  kinds: Map<string, Set<string>> | null
+  today?: string
+}
+
+/** Các điều kiện lọc ở client: hiệu lực, kiểu thu, đợt quá hạn, sắp hết hạn. */
+export function applyClientFilters<T extends { name: string; status?: string | null; start_date?: string | null; end_date?: string | null }>(
+  rows: T[],
+  f: PanelFilters,
+  ctx: ClientFilterContext,
+): T[] {
+  const today = ctx.today ?? todayStr()
+  return rows.filter((r) => {
+    if ((f.effectiveFrom || f.effectiveTo) && !overlapsEffective(r, f.effectiveFrom, f.effectiveTo)) return false
+    if (f.billingKind && ctx.kinds && !ctx.kinds.get(r.name)?.has(f.billingKind)) return false
+    if (f.onlyOverdue && ctx.overdue) {
+      if (r.status === 'Nháp' || r.status === 'Đã hủy' || !ctx.overdue.has(r.name)) return false
+    }
+    if (f.onlyExpiring && !isExpiringSoon(r, today)) return false
+    return true
+  })
+}
+
 export function filtersActive(f: PanelFilters): boolean {
-  const d = emptyFilters()
-  return (
-    f.contractNo !== d.contractNo ||
-    f.customer !== d.customer ||
-    f.responsibleUser !== d.responsibleUser ||
-    f.contractType !== d.contractType ||
-    f.onlyOutstanding !== d.onlyOutstanding ||
-    f.groups.length !== d.groups.length ||
-    f.groups.includes(EXPIRING_KEY)
+  const d = emptyFilters() as unknown as Record<string, unknown>
+  return (Object.entries(f) as [string, unknown][]).some(([k, v]) =>
+    Array.isArray(v) ? v.length > 0 : v !== d[k],
   )
 }
 
