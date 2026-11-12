@@ -8,3 +8,4 @@ contract_tracker.patches.v0_1.create_contract_roles
 contract_tracker.patches.v0_1.create_initial_vat_rates
 contract_tracker.patches.v0_1.fill_schedule_responsible_user
 contract_tracker.patches.v0_1.create_payment_request_print_format
+contract_tracker.patches.v0_1.create_acceptance_minutes_print_format

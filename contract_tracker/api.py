@@ -9,6 +9,7 @@ from contract_tracker.contract_tracker.doctype.contract.contract import TOLERANC
 from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import (
 	BILLABLE_CONTRACT_STATUSES,
 	active_invoice_by_schedule,
+	minutes_by_schedule,
 	paid_by_schedule,
 	request_by_schedule,
 )
@@ -48,6 +49,7 @@ def get_billing_permissions() -> dict:
 		"invoice_write": bool(frappe.has_permission("Sales Invoice Record", "write")),
 		"receipt_write": bool(frappe.has_permission("Payment Receipt", "write")),
 		"request_write": bool(frappe.has_permission("Payment Request", "write")),
+		"acceptance_write": bool(frappe.has_permission("Acceptance Minutes", "write")),
 	}
 
 
@@ -116,6 +118,21 @@ def get_requestable_schedules(customer: str, request: str | None = None) -> list
 			r["payment_request"] = requests.get(r.name)
 			result.append(r)
 	return result
+
+
+@frappe.whitelist()
+def get_acceptable_schedules(customer: str, minutes: str | None = None) -> list:
+	"""Đợt cần nghiệm thu của khách hàng cho form biên bản, kèm biên bản khác đang chứa đợt (bỏ qua `minutes`)."""
+	frappe.has_permission("Acceptance Minutes", "read", throw=True)
+	rows = _billable_schedules(
+		customer,
+		SCHEDULE_ROW_FIELDS + ["customer", "item_name", "period_from", "period_to", "requires_acceptance"],
+	)
+	rows = [r for r in rows if r.requires_acceptance]
+	taken = minutes_by_schedule([r.name for r in rows], exclude_minutes=minutes)
+	for r in rows:
+		r["acceptance_minutes"] = taken.get(r.name)
+	return rows
 
 
 @frappe.whitelist()

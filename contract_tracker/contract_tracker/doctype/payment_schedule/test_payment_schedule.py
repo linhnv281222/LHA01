@@ -259,6 +259,32 @@ class TestPaymentSchedule(IntegrationTestCase):
 		refresh_schedules([first])
 		self.assertEqual(frappe.db.get_value(DT, first, "request_status"), "Đã lập")
 
+	def test_refresh_schedules_acceptance_status(self):
+		from contract_tracker.contract_tracker.doctype.acceptance_minutes.test_acceptance_minutes import (
+			make_minutes,
+			need_acceptance,
+		)
+		from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import minutes_by_schedule
+
+		doc = active(example_contract())
+		first, second = [r.name for r in schedules(doc.name)][:2]
+		need_acceptance(first)
+		need_acceptance(second, value=0)
+		minutes = make_minutes(doc.customer, [first]).insert()
+		self.assertEqual(minutes_by_schedule([first, second]), {first: minutes.name})
+		self.assertEqual(minutes_by_schedule([first], status="Đã ký"), {})
+		self.assertEqual(minutes_by_schedule([first], exclude_minutes=minutes.name), {})
+		self.assertEqual(frappe.db.get_value(DT, first, "acceptance_status"), "Chưa")
+		minutes.scan_file = "/files/bb.pdf"
+		minutes.save()
+		minutes.mark_signed()
+		self.assertEqual(frappe.db.get_value(DT, first, "acceptance_status"), "Đã ký")
+		refresh_schedules([first, second])
+		self.assertEqual(frappe.db.get_value(DT, first, "acceptance_status"), "Đã ký")
+		self.assertEqual(frappe.db.get_value(DT, second, "acceptance_status"), "Không cần")
+		refresh_schedules([first], exclude_minutes=minutes.name)
+		self.assertEqual(frappe.db.get_value(DT, first, "acceptance_status"), "Chưa")
+
 	def test_refresh_schedules_ignores_missing(self):
 		refresh_schedules(["", None, "DT-KHONG-CO"])
 

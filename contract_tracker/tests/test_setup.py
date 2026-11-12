@@ -2,6 +2,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from contract_tracker.setup import (
+	ACCEPTANCE_MINUTES_PRINT_FORMAT,
 	INITIAL_VAT_RATES,
 	PAYMENT_REQUEST_PRINT_FORMAT,
 	ROLES,
@@ -58,6 +59,47 @@ class TestSetup(IntegrationTestCase):
 			),
 			PAYMENT_REQUEST_PRINT_FORMAT,
 		)
+
+	def test_ensure_print_formats_acceptance_minutes(self):
+		ensure_print_formats()
+		ensure_print_formats()
+		self.assertEqual(frappe.db.count("Print Format", {"name": ACCEPTANCE_MINUTES_PRINT_FORMAT}), 1)
+		pf = frappe.get_doc("Print Format", ACCEPTANCE_MINUTES_PRINT_FORMAT)
+		self.assertEqual(pf.doc_type, "Acceptance Minutes")
+		self.assertEqual(pf.standard, "No")
+		for text in ("BIÊN BẢN NGHIỆM THU", "doc.items", "Chữ ký", "party_a_rep"):
+			self.assertIn(text, pf.html)
+		self.assertEqual(
+			frappe.db.get_value(
+				"Property Setter",
+				{"doc_type": "Acceptance Minutes", "property": "default_print_format"},
+				"value",
+			),
+			ACCEPTANCE_MINUTES_PRINT_FORMAT,
+		)
+
+	def test_ensure_print_formats_keeps_edits_acceptance(self):
+		ensure_print_formats()
+		original = frappe.db.get_value("Print Format", ACCEPTANCE_MINUTES_PRINT_FORMAT, "html")
+		# Trả lại mẫu gốc khi xong: thay đổi này có thể bị commit ngầm khi in và ảnh hưởng test khác.
+		self.addCleanup(frappe.db.set_value, "Print Format", ACCEPTANCE_MINUTES_PRINT_FORMAT, "html", original)
+		frappe.db.set_value("Print Format", ACCEPTANCE_MINUTES_PRINT_FORMAT, "html", "<p>BBNT ĐÃ SỬA {{ doc.name }}</p>")
+		ensure_print_formats()
+		from contract_tracker.contract_tracker.doctype.acceptance_minutes.test_acceptance_minutes import (
+			make_minutes,
+			need_acceptance,
+		)
+		from contract_tracker.contract_tracker.doctype.sales_invoice_record.test_sales_invoice_record import (
+			make_billing_contract,
+			schedule_of,
+		)
+
+		contract = make_billing_contract()
+		schedule = schedule_of(contract.name, "Tạm ứng")
+		need_acceptance(schedule)
+		doc = make_minutes(contract.customer, [schedule]).insert()
+		html = frappe.get_print("Acceptance Minutes", doc.name, print_format=ACCEPTANCE_MINUTES_PRINT_FORMAT)
+		self.assertIn("BBNT ĐÃ SỬA " + doc.name, html)
 
 	def test_ensure_print_formats_keeps_edits(self):
 		ensure_print_formats()

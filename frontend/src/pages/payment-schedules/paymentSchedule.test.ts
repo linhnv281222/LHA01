@@ -3,8 +3,10 @@ import { computeTotals, formatCurrency } from '@/standard'
 import {
   COLUMNS,
   MSG_EMPTY,
+  MSG_IN_OTHER_MINUTES_PICK,
   MSG_INVOICED,
   MSG_NO_SELECTION,
+  MSG_NOT_REQUIRED_PICK,
   MSG_PAID,
   MSG_SAME_CUSTOMER,
   ORDER_BY,
@@ -15,6 +17,7 @@ import {
   filtersActive,
   groupTree,
   makeColumns,
+  minutesConflicts,
   outstandingOf,
   parseScheduleQuery,
   periodRange,
@@ -259,6 +262,28 @@ describe('chọn nhiều đợt', () => {
     expect(s.request.reason).toBe(MSG_PAID.replace('{0}', 'Đợt P'))
     const listed = row('l', { request_status: 'Đã lập', invoice_status: 'Đã xuất' })
     expect(actionState([a1, listed]).request).toEqual({ enabled: true, reason: '' })
+  })
+  it('nút lập biên bản: khóa khi chưa chọn; có đợt không cần nghiệm thu hoặc đã ký thì khóa kèm tên đợt', () => {
+    expect(actionState([]).acceptance).toEqual({ enabled: false, reason: MSG_NO_SELECTION })
+    expect(actionState([a1, a2]).acceptance).toEqual({ enabled: true, reason: '' })
+    const none = row('n', { schedule_name: 'Đợt N', requires_acceptance: 0, acceptance_status: 'Không cần' })
+    const s = actionState([a1, none])
+    expect(s.acceptance.enabled).toBe(false)
+    expect(s.acceptance.reason).toBe(MSG_NOT_REQUIRED_PICK.replace('{0}', 'Đợt N'))
+    const signed = row('s', { schedule_name: 'Đợt S', acceptance_status: 'Đã ký' })
+    expect(actionState([a1, signed]).acceptance.reason).toBe(MSG_IN_OTHER_MINUTES_PICK.replace('{0}', 'Đợt S'))
+    // Đợt đã thu đủ vẫn lập biên bản được (không bắt buộc thứ tự chứng từ).
+    const paid = row('p', { payment_status: 'Đã thu', paid_amount: 110 })
+    expect(actionState([paid]).acceptance.enabled).toBe(true)
+  })
+  it('minutesConflicts liệt kê đợt đang chọn nằm trong biên bản khác', () => {
+    const acceptable = [
+      { name: 'A', schedule_name: 'Đợt A', acceptance_minutes: 'BBNT-2027-00001' },
+      { name: 'B', schedule_name: 'Đợt B', acceptance_minutes: null },
+      { name: 'C', schedule_name: 'Đợt C', acceptance_minutes: 'BBNT-2027-00002' },
+    ]
+    expect(minutesConflicts(['A', 'B'], acceptable)).toEqual(['Đợt A (BBNT-2027-00001)'])
+    expect(minutesConflicts(['B'], acceptable)).toEqual([])
   })
   it('đường dẫn ?schedules= ghi và đọc lại, bỏ phần rỗng và trùng', () => {
     expect(toScheduleQuery(['DT-1', 'DT-2'])).toBe('DT-1,DT-2')

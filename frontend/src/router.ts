@@ -90,6 +90,22 @@ export const router = createRouter({
       component: () => import('./pages/payment-requests/PaymentRequestForm.vue'),
       props: true,
     },
+    {
+      path: '/acceptance-minutes',
+      name: 'AcceptanceMinutesList',
+      component: () => import('./pages/acceptance-minutes/AcceptanceMinutesList.vue'),
+    },
+    {
+      path: '/acceptance-minutes/new',
+      name: 'AcceptanceMinutesNew',
+      component: () => import('./pages/acceptance-minutes/AcceptanceMinutesForm.vue'),
+    },
+    {
+      path: '/acceptance-minutes/:name/edit',
+      name: 'AcceptanceMinutesEdit',
+      component: () => import('./pages/acceptance-minutes/AcceptanceMinutesForm.vue'),
+      props: true,
+    },
     { path: '/invoices', name: 'InvoiceList', component: () => import('./pages/invoices/InvoiceList.vue') },
     { path: '/invoices/new', name: 'InvoiceNew', component: () => import('./pages/invoices/InvoiceForm.vue') },
     {

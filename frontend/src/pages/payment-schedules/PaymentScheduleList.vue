@@ -15,6 +15,7 @@ import {
   StatCards,
   formatCurrency,
   formatDate,
+  serverErrorMessage,
   type DataTableExpose,
   type DetailField,
   type SelectOption,
@@ -26,6 +27,7 @@ import {
   LIMIT,
   LIST_FIELDS,
   MSG_EMPTY,
+  MSG_IN_OTHER_MINUTES_PICK,
   MSG_LIMIT,
   MSG_SAME_CUSTOMER,
   ORDER_BY,
@@ -34,8 +36,10 @@ import {
   canPick,
   emptyFilters,
   filtersActive,
+  fmt,
   groupTree,
   makeColumns,
+  minutesConflicts,
   outstandingOf,
   periodRange,
   quickCards,
@@ -89,7 +93,7 @@ watch(
 const customers = useList<ContractCustomer>({ doctype: 'Contract Customer', fields: ['name', 'customer_name'], orderBy: 'customer_name asc', limit: 5000 })
 const contracts = useList<{ name: string }>({ doctype: 'Contract', fields: ['name'], orderBy: 'name asc', limit: 5000 })
 const users = useCall<{ name: string; full_name: string }[]>({ url: '/api/v2/method/contract_tracker.api.get_responsible_users' })
-const perms = useCall<{ invoice_write: boolean; receipt_write: boolean; request_write: boolean }>({ url: '/api/v2/method/contract_tracker.api.get_billing_permissions' })
+const perms = useCall<{ invoice_write: boolean; receipt_write: boolean; request_write: boolean; acceptance_write: boolean }>({ url: '/api/v2/method/contract_tracker.api.get_billing_permissions' })
 const userList = computed(() => (Array.isArray(users.data) ? users.data : []))
 const customerOptions = computed<SelectOption[]>(() => (customers.data ?? []).map((c) => ({ label: c.customer_name, value: c.name })))
 const contractOptions = computed<SelectOption[]>(() => (contracts.data ?? []).map((c) => ({ label: c.name, value: c.name })))
@@ -129,18 +133,48 @@ const perm = computed(() => ({
   invoice: perms.data?.invoice_write === true,
   receipt: perms.data?.receipt_write === true,
   request: perms.data?.request_write === true,
+  acceptance: perms.data?.acceptance_write === true,
 }))
 const blockedReason = computed(() => {
   if (!pickedRows.value.length) return ''
   const reasons = [
     perm.value.request ? state.value.request.reason : '',
+    perm.value.acceptance ? state.value.acceptance.reason : '',
     perm.value.invoice ? state.value.invoice.reason : '',
     perm.value.receipt ? state.value.receipt.reason : '',
   ].filter(Boolean)
   return [...new Set(reasons)].join(' ')
 })
-function record(kind: 'invoices' | 'receipts' | 'payment-requests') {
+function record(kind: 'invoices' | 'receipts' | 'payment-requests' | 'acceptance-minutes') {
   void router.push({ path: `/${kind}/new`, query: { schedules: toScheduleQuery(pickedRows.value.map((r) => r.name)) } })
+}
+
+// Lập biên bản nghiệm thu: đợt nằm trong biên bản Nháp khác thì báo rõ đợt nào và dừng, không mở form.
+const checkingMinutes = ref(false)
+const acceptableCall = useCall<unknown, { customer: string }>({
+  url: '/api/v2/method/contract_tracker.api.get_acceptable_schedules',
+  method: 'POST',
+  immediate: false,
+})
+async function recordMinutes() {
+  const first = pickedRows.value[0]
+  if (!first || checkingMinutes.value) return
+  checkingMinutes.value = true
+  try {
+    const res = (await acceptableCall.submit({ customer: first.customer })) as { data?: unknown; message?: unknown } | unknown[] | null
+    const value = Array.isArray(res) ? res : ((res as { data?: unknown; message?: unknown } | null)?.data ?? (res as { message?: unknown } | null)?.message)
+    const acceptable = Array.isArray(value) ? (value as { name: string; schedule_name?: string; acceptance_minutes?: string }[]) : []
+    const conflicts = minutesConflicts(pickedRows.value.map((r) => r.name), acceptable)
+    if (conflicts.length) {
+      toast.error(fmt(MSG_IN_OTHER_MINUTES_PICK, conflicts.join(', ')))
+      return
+    }
+    record('acceptance-minutes')
+  } catch (err) {
+    toast.error(serverErrorMessage(err))
+  } finally {
+    checkingMinutes.value = false
+  }
 }
 
 // Dòng đang xem chi tiết, đồng bộ ?selected=.
@@ -206,6 +240,17 @@ function exportExcel() {
           :disabled="!state.request.enabled"
           :title="state.request.reason"
           @click="record('payment-requests')"
+        />
+        <Button
+          v-if="perm.acceptance"
+          size="md"
+          variant="outline"
+          icon-left="lucide-file-signature"
+          label="Lập biên bản nghiệm thu"
+          :disabled="!state.acceptance.enabled"
+          :loading="checkingMinutes"
+          :title="state.acceptance.reason"
+          @click="recordMinutes"
         />
         <Button
           v-if="perm.invoice"

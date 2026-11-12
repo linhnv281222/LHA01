@@ -1,6 +1,78 @@
 // Sinh tự động bởi scripts/gen_doctype_types.py từ JSON của DocType. KHÔNG sửa tay;
 // đổi DocType rồi chạy verify.sh là file này được sinh lại.
 
+/** DocType "Acceptance Minutes" (contract_tracker/contract_tracker/doctype/acceptance_minutes/acceptance_minutes.json) */
+export interface AcceptanceMinutes {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  /** Khách hàng */
+  customer: string
+  /** Tên khách hàng */
+  customer_name?: string | null
+  /** Ngày nghiệm thu */
+  minutes_date: string
+  /** Trạng thái */
+  status?: "Nh\u00e1p" | "\u0110\u00e3 k\u00fd" | null
+  /** Ghi chú */
+  notes?: string | null
+  /** Các đợt thu */
+  items: AcceptanceMinutesItem[]
+  /** Số đợt */
+  schedule_count?: number | null
+  /** Tổng trước thuế (VND) */
+  total_before_tax?: number | null
+  /** Tổng thuế (VND) */
+  total_tax?: number | null
+  /** Tổng cộng (VND) */
+  grand_total?: number | null
+  /** Nội dung nghiệm thu */
+  content?: string | null
+  /** Đại diện bên A */
+  party_a_rep?: string | null
+  /** Đại diện bên B */
+  party_b_rep?: string | null
+  /** File scan biên bản đã ký */
+  scan_file?: string | null
+}
+
+/** DocType "Acceptance Minutes Item" (contract_tracker/contract_tracker/doctype/acceptance_minutes_item/acceptance_minutes_item.json) */
+export interface AcceptanceMinutesItem {
+  name: string
+  owner?: string
+  creation?: string
+  modified?: string
+  modified_by?: string
+  docstatus?: 0 | 1 | 2
+  parent?: string
+  parentfield?: string
+  parenttype?: string
+  idx?: number
+  /** Đợt thu */
+  schedule: string
+  /** Hợp đồng */
+  contract?: string | null
+  /** Tên đợt */
+  schedule_name?: string | null
+  /** Hạng mục */
+  item_name?: string | null
+  /** Kỳ từ */
+  period_from?: string | null
+  /** Kỳ đến */
+  period_to?: string | null
+  /** Ngày đến hạn */
+  due_date?: string | null
+  /** Trước thuế (VND) */
+  amount_before_tax?: number | null
+  /** Tiền thuế (VND) */
+  tax_amount?: number | null
+  /** Tổng tiền (VND) */
+  total_amount?: number | null
+}
+
 /** DocType "Contract" (contract_tracker/contract_tracker/doctype/contract/contract.json) */
 export interface Contract {
   name: string

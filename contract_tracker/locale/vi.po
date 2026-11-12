@@ -54,6 +54,12 @@ msgstr "Đề nghị thanh toán"
 msgid "Payment Request Item"
 msgstr "Dòng đề nghị thanh toán"
 
+msgid "Acceptance Minutes"
+msgstr "Biên bản nghiệm thu"
+
+msgid "Acceptance Minutes Item"
+msgstr "Dòng biên bản nghiệm thu"
+
 msgid "Contract Tracker Settings"
 msgstr "Cài đặt công ty"
 
