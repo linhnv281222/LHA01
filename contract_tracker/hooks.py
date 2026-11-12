@@ -17,15 +17,18 @@ website_route_rules = [
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "contract_tracker",
-# 		"logo": "/assets/contract_tracker/logo.png",
-# 		"title": "Contract Tracker",
-# 		"route": "/contract_tracker",
-# 		"has_permission": "contract_tracker.api.permission.has_app_permission",
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "contract_tracker",
+		"logo": "/assets/contract_tracker/contract-tracker-logo.svg",
+		"title": "Quản lý hợp đồng",
+		"route": "/contracts",
+		"has_permission": "contract_tracker.api.has_app_permission",
+	}
+]
+
+# Trang chủ của người có vai trò của app (trừ Administrator): /contracts.
+get_website_user_home_page = "contract_tracker.api.get_home_page"
 
 # The dock, the rail down the left of the desk, is a document rather than a hook. Author it in
 # Manage Dock on a developer-mode site and press Export to App, and it is written to
