@@ -154,6 +154,13 @@ describe('kiểm tra form', () => {
     form.items = [rowOf({ ...ADVANCE, outstanding: 0 })]
     expect(validateForm(form)['items.0.schedule']).toBe(MSG_FULLY_PAID.replace('{0}', '1').replace('{1}', 'DT-1'))
   })
+  it('dòng đã lưu có outstanding 0 thì không báo lỗi, dòng mới thì báo', () => {
+    const form = validForm()
+    form.items = [rowOf({ ...ADVANCE, outstanding: 0 }), rowOf({ ...LICENSE, outstanding: 0 })]
+    const errors = validateForm(form, ['DT-1'])
+    expect(errors['items.0.schedule']).toBeUndefined()
+    expect(errors['items.1.schedule']).toBe(MSG_FULLY_PAID.replace('{0}', '2').replace('{1}', 'DT-2'))
+  })
 })
 
 describe('tính tổng', () => {

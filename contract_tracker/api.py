@@ -125,6 +125,7 @@ def get_request_schedules_for_invoice(payment_request: str, customer: str, invoi
 	frappe.has_permission("Payment Request", "read", throw=True)
 	frappe.has_permission("Sales Invoice Record", "read", throw=True)
 	request = frappe.get_doc("Payment Request", payment_request)
+	request.check_permission("read")
 	if request.customer != customer:
 		frappe.throw(
 			frappe._("Đề nghị thanh toán {0} không thuộc khách hàng của hóa đơn.").format(payment_request)

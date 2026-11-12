@@ -290,7 +290,12 @@ export const FORM_RULES: Rules<RequestForm> = {
 }
 
 /** Lỗi các dòng đợt, khóa `items` (chung) hoặc `items.<i>.schedule`. Dòng trống bị bỏ qua. */
-export function validateItems(form: Pick<RequestForm, 'items' | 'customer'>): Record<string, string> {
+export function validateItems(
+  form: Pick<RequestForm, 'items' | 'customer'>,
+  savedSchedules: Iterable<string> = [],
+): Record<string, string> {
+  // Khớp controller: chỉ dòng mới thêm (đợt chưa có trong bản đã lưu) mới kiểm tra còn nợ.
+  const saved = new Set(savedSchedules)
   const errors: Record<string, string> = {}
   const rows = form.items.map((item, i) => ({ item, i })).filter((r) => r.item.schedule)
   if (!rows.length) {
@@ -303,20 +308,20 @@ export function validateItems(form: Pick<RequestForm, 'items' | 'customer'>): Re
     if (seen.has(item.schedule)) errors[key] = fmt(MSG_DUP_ROW, i + 1, item.schedule)
     else if (item.customer && form.customer && item.customer !== form.customer) {
       errors[key] = fmt(MSG_OTHER_CUSTOMER, i + 1, item.schedule)
-    } else if (Number(item.outstanding) <= 0) errors[key] = fmt(MSG_FULLY_PAID, i + 1, item.schedule)
+    } else if (!saved.has(item.schedule) && Number(item.outstanding) <= 0) errors[key] = fmt(MSG_FULLY_PAID, i + 1, item.schedule)
     seen.add(item.schedule)
   }
   return errors
 }
 
 /** Kiểm tra cả form (quy tắc từng ô và các dòng đợt); trả về {khóa: câu lỗi}, rỗng nếu hợp lệ. */
-export function validateForm(form: RequestForm): Record<string, string> {
+export function validateForm(form: RequestForm, savedSchedules: Iterable<string> = []): Record<string, string> {
   const errors: Record<string, string> = {}
   for (const [key, rule] of Object.entries(FORM_RULES)) {
     const msg = checkField(rule!, (form as unknown as Record<string, unknown>)[key], form)
     if (msg) errors[key] = msg
   }
-  return { ...errors, ...validateItems(form) }
+  return { ...errors, ...validateItems(form, savedSchedules) }
 }
 
 /** Tổng xem trước khi lưu (server tính lại khi lưu). */
