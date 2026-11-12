@@ -67,10 +67,29 @@ class TestDemoDataSeed(IntegrationTestCase):
 			"Contract Item", filters={"parent": ["in", _sample_names()]}, fields=["billing_type", "vat_rate", "parent"]
 		)
 
-	def test_ten_contracts_by_status(self):
-		self.assertEqual(len(self._contracts()), 10)
-		for status, n in (("Đang hiệu lực", 5), ("Hết hạn", 2), ("Đã thanh lý", 3)):
+	def test_thirteen_contracts_by_status(self):
+		self.assertEqual(len(self._contracts()), 13)
+		for status, n in (("Đang hiệu lực", 6), ("Hết hạn", 2), ("Đã thanh lý", 3), ("Nháp", 1), ("Đã hủy", 1)):
 			self.assertEqual(len(self._contracts(status=status)), n, status)
+
+	def test_list_screen_scenarios(self):
+		# Có hợp đồng đã thu một phần.
+		partial = [c for c in self._contracts() if 0 < frappe.db.get_value("Contract", c.name, "paid_amount") < c.total_after_tax]
+		self.assertTrue(partial)
+		# Có đợt quá hạn chưa thu đủ thuộc hợp đồng Đang hiệu lực.
+		active = [c.name for c in self._contracts(status="Đang hiệu lực")]
+		overdue = frappe.get_all(
+			"Payment Schedule",
+			filters={"contract": ["in", active], "due_date": ["<", today()]},
+			fields=["total_amount", "paid_amount"],
+		)
+		self.assertTrue([s for s in overdue if s.paid_amount < s.total_amount])
+		# Có hợp đồng Đang hiệu lực sắp hết hạn trong 30 ngày.
+		soon = frappe.get_all(
+			"Contract",
+			filters={"name": ["like", "MAU-%"], "status": "Đang hiệu lực", "end_date": ["between", [today(), add_days(today(), 30)]]},
+		)
+		self.assertTrue(soon)
 
 	def test_billing_types_and_vat(self):
 		items = self._items()
@@ -83,6 +102,8 @@ class TestDemoDataSeed(IntegrationTestCase):
 	def test_items_and_schedules(self):
 		for name in _sample_names():
 			self.assertTrue(frappe.db.count("Contract Item", {"parent": name}), name)
+			if frappe.db.get_value("Contract", name, "status") in ("Nháp", "Đã hủy"):
+				continue  # Nháp và Đã hủy không có lịch thu
 			self.assertTrue(frappe.db.count("Payment Schedule", {"contract": name}), name)
 
 	def test_documents_present(self):
@@ -143,7 +164,7 @@ class TestDemoDataSeed(IntegrationTestCase):
 		with patch.dict(frappe.conf, STAGING):
 			result = seed()
 		self.assertEqual(_count(), before)
-		self.assertEqual(result["skipped"]["Contract"], 10)
+		self.assertEqual(result["skipped"]["Contract"], 13)
 		self.assertTrue(all(v == 0 for v in result["created"].values()))
 
 
@@ -160,11 +181,11 @@ class TestDemoDataClear(IntegrationTestCase):
 
 		with patch.dict(frappe.conf, STAGING):
 			seed()
-			self.assertEqual(len(_sample_names()), 10)
+			self.assertEqual(len(_sample_names()), 13)
 			self.assertGreater(frappe.db.count("Payment Receipt"), base["Payment Receipt"])
 			result = clear()
 
-		self.assertEqual(result["deleted"]["Contract"], 10)
+		self.assertEqual(result["deleted"]["Contract"], 13)
 		self.assertEqual(_sample_names(), [])
 		self.assertEqual(frappe.db.count("Payment Schedule", {"contract": ["like", "MAU-%"]}), 0)
 		self.assertEqual(frappe.db.count("Contract Customer", {"tax_code": ["like", "MAU-KH-%"]}), 0)

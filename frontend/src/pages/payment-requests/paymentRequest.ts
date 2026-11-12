@@ -273,6 +273,11 @@ export function prefillFromSchedules(
   return { customer, items, skipped }
 }
 
+/** Tên các đợt còn nợ của một hợp đồng (giữ thứ tự của `available`), dùng cho `?contract=`. */
+export function scheduleNamesOfContract(available: RequestableSchedule[], contract: string): string[] {
+  return available.filter((s) => s.contract === contract).map((s) => s.name)
+}
+
 export const FORM_RULES: Rules<RequestForm> = {
   customer: { label: 'Khách hàng', required: true },
   request_date: { label: 'Ngày lập', required: true },

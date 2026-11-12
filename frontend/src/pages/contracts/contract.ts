@@ -9,6 +9,7 @@ import {
   formatNumber,
   lowerFirst,
   type Column,
+  type DetailField,
   type Rules,
   type StatCard,
   type StatusDef,
@@ -73,52 +74,175 @@ export function fmt(template: string, ...args: (string | number)[]): string {
 
 // ---- Danh sách ----
 
+export const EXPIRING_KEY = 'expiring'
+export const EXPIRING_DAYS = 30
+/** Sai số khi so sánh tiền (cùng mức với milestoneSummary). */
+export const MONEY_EPS = 0.01
+const NO_VALUE = 'Không có'
+
+const todayIso = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 export const COLUMNS: Column<Contract>[] = [
-  { key: '_index', label: 'STT', width: 56, type: 'index', pin: 'left' },
-  { key: 'contract_no', label: 'Số hợp đồng', width: 150, pin: 'left', required: true },
-  { key: 'customer_name', label: 'Khách hàng', width: 240 },
-  { key: 'contract_type_name', label: 'Loại hợp đồng', width: 180 },
-  { key: 'contract_title', label: 'Tên hợp đồng', width: 260 },
-  { key: 'start_date', label: 'Ngày bắt đầu', width: 120, type: 'date' },
-  { key: 'end_date', label: 'Ngày kết thúc', width: 120, type: 'date' },
-  { key: 'responsible_name', label: 'Người phụ trách', width: 180 },
+  { key: '_index', label: 'STT', width: 48, type: 'index', pin: 'left' },
+  { key: 'contract_no', label: 'Số hợp đồng', width: 120, pin: 'left', required: true },
+  { key: '_party', label: 'Khách hàng / Nội dung', width: 230, format: (r) => r.customer_name ?? '' },
+  { key: 'contract_type_name', label: 'Loại hợp đồng', width: 170, hidden: true },
   {
     key: 'status',
     label: 'Trạng thái',
-    width: 160,
+    width: 140,
     type: 'status',
     status: statusOf,
     filter: 'select',
     options: STATUSES.map((s) => ({ label: s, value: s })),
   },
-  { key: 'total_before_tax', label: 'Giá trị trước thuế (VND)', width: 190, type: 'currency', sum: true },
-  { key: 'total_after_tax', label: 'Tổng sau thuế (VND)', width: 170, type: 'currency', sum: true },
-  { key: 'paid_amount', label: 'Đã thu (VND)', width: 150, type: 'currency', sum: true },
-  { key: 'outstanding_amount', label: 'Còn phải thu (VND)', width: 170, type: 'currency', sum: true },
-  { key: '_actions', label: 'Thao tác', width: 110, pin: 'right', sortable: false, filter: 'none', required: true },
+  { key: 'signed_date', label: 'Ngày ký', width: 120, type: 'date', hidden: true },
+  { key: '_effective', label: 'Hiệu lực', width: 170, format: (r) => effectiveText(r) },
+  { key: 'total_before_tax', label: 'Giá trị trước thuế (VND)', width: 160, type: 'currency', sum: true, hidden: true },
+  { key: 'total_after_tax', label: 'Tổng sau thuế (VND)', width: 140, type: 'currency', sum: true },
+  { key: 'paid_amount', label: 'Đã thu (VND)', width: 140, type: 'currency', sum: true },
+  { key: 'outstanding_amount', label: 'Còn phải thu (VND)', width: 140, type: 'currency', sum: true },
+  { key: 'responsible_name', label: 'Phụ trách', width: 120 },
+  { key: '_actions', label: 'Thao tác', width: 72, pin: 'right', sortable: false, filter: 'none', required: true },
 ]
+
+/** Tỷ lệ đã thu (%), làm tròn nguyên, 0..100; tổng bằng 0 thì 0. */
+export function collectedPercent(paid: number | null | undefined, total: number | null | undefined): number {
+  const t = Number(total ?? 0)
+  if (!(t > 0)) return 0
+  return Math.min(100, Math.max(0, Math.round((Number(paid ?? 0) / t) * 100)))
+}
+
+/** Số ngày từ hôm nay đến ngày kết thúc (âm = đã qua); null khi chưa có ngày kết thúc. */
+export function daysLeft(end: string | null | undefined, today: string = todayIso()): number | null {
+  if (!end) return null
+  return diffDays(parseIso(end), parseIso(today))
+}
+
+export function remainingText(end: string | null | undefined, today: string = todayIso()): string {
+  const n = daysLeft(end, today)
+  if (n === null) return 'chưa đặt'
+  return n >= 0 ? `còn ${n} ngày` : `đã hết hạn ${-n} ngày`
+}
+
+/** "dd/mm/yyyy – dd/mm/yyyy". */
+export function effectiveText(row: { start_date?: string | null; end_date?: string | null }): string {
+  if (row.start_date && row.end_date) return `${formatDate(row.start_date)} – ${formatDate(row.end_date)}`
+  if (row.start_date) return `Từ ${formatDate(row.start_date)}`
+  if (row.end_date) return `Đến ${formatDate(row.end_date)}`
+  return NO_VALUE
+}
+
+/** Hai dòng của ô "Khách hàng / Nội dung". */
+export function partyLines(row: Pick<Contract, 'customer_name' | 'contract_title'>): { top: string; bottom: string } {
+  return { top: row.customer_name ?? '', bottom: row.contract_title?.trim() ? row.contract_title : 'Chưa có nội dung' }
+}
+
+export function expiringRange(today: string = todayIso()): { from: string; to: string } {
+  return { from: today, to: toIso(addDays(parseIso(today), EXPIRING_DAYS)) }
+}
+
+/** Đang hiệu lực và ngày kết thúc từ hôm nay đến hôm nay + 30 ngày (gồm hai đầu). */
+export function isExpiringSoon(row: { status?: string | null; end_date?: string | null }, today: string = todayIso()): boolean {
+  if (row.status !== 'Đang hiệu lực' || !row.end_date) return false
+  const { from, to } = expiringRange(today)
+  return row.end_date >= from && row.end_date <= to
+}
+
+export interface ContractSchedule {
+  name?: string
+  contract?: string | null
+  item_key?: string | null
+  due_date?: string | null
+  total_amount?: number | null
+  paid_amount?: number | null
+  payment_status?: string | null
+  is_overdue?: 0 | 1 | boolean | null
+}
+
+export const SCHEDULE_LIST_FIELDS: (keyof ContractSchedule)[] = ['name', 'contract', 'item_key', 'due_date', 'total_amount', 'paid_amount', 'payment_status', 'is_overdue']
+
+/** Phần còn thiếu của một đợt thu. */
+export const shortfall = (s: Pick<ContractSchedule, 'total_amount' | 'paid_amount'>): number =>
+  Math.max(0, Number(s.total_amount ?? 0) - Number(s.paid_amount ?? 0))
+
+/** Đợt quá hạn: due_date < hôm nay và còn thiếu; chỉ hợp đồng có trong `statusByContract` và không phải Nháp/Đã hủy. */
+export function overdueSummary(
+  schedules: ContractSchedule[],
+  statusByContract: Record<string, string | null | undefined>,
+  today: string = todayIso(),
+): { count: number; amount: number } {
+  let count = 0
+  let amount = 0
+  for (const s of schedules) {
+    const status = s.contract ? statusByContract[s.contract] : undefined
+    if (!status || status === 'Nháp' || status === 'Đã hủy') continue
+    if (!s.due_date || s.due_date >= today || shortfall(s) <= MONEY_EPS) continue
+    count += 1
+    amount += shortfall(s)
+  }
+  return { count, amount }
+}
+
+/** Ngày đến hạn nhỏ nhất từ hôm nay trong các đợt chưa thu đủ; không có thì null. */
+export function nextDueDate(schedules: ContractSchedule[], today: string = todayIso()): string | null {
+  const dates = schedules
+    .filter((s) => s.due_date && s.due_date >= today && shortfall(s) > MONEY_EPS)
+    .map((s) => s.due_date as string)
+    .sort()
+  return dates[0] ?? null
+}
+
+export const nextDueText = (date: string | null): string => (date ? formatDate(date) : NO_VALUE)
 
 /** Thẻ số liệu của danh sách, tính trên dữ liệu đã lọc. Thẻ "Đang hiệu lực" bấm được để lọc. */
 export function statCards(
-  rows: Pick<Contract, 'status' | 'total_after_tax' | 'paid_amount' | 'outstanding_amount'>[],
+  rows: Pick<Contract, 'name' | 'status' | 'end_date' | 'total_after_tax' | 'paid_amount' | 'outstanding_amount'>[],
+  schedules: ContractSchedule[] | null = null,
+  today: string = todayIso(),
 ): StatCard[] {
   const sum = (pick: (r: (typeof rows)[number]) => number | null | undefined) =>
     rows.reduce((acc, r) => acc + Number(pick(r) ?? 0), 0)
+  const active = rows.filter((r) => r.status === 'Đang hiệu lực').length
+  const expiring = rows.filter((r) => isExpiringSoon(r, today)).length
+  const totalPaid = sum((r) => r.paid_amount)
+  let overdueHint = NO_VALUE
+  if (schedules) {
+    const byContract = Object.fromEntries(rows.map((r) => [r.name, r.status]))
+    const o = overdueSummary(schedules, byContract, today)
+    overdueHint = `${o.count} đợt quá hạn · ${formatCurrency(o.amount)}`
+  }
   return [
     {
       key: 'Đang hiệu lực',
       label: 'Đang hiệu lực',
-      value: rows.filter((r) => r.status === 'Đang hiệu lực').length,
+      value: `${active} / ${rows.length}`,
+      hint: `${expiring} hợp đồng hết hạn trong ${EXPIRING_DAYS} ngày`,
       status: CONTRACT_STATUS['Đang hiệu lực'],
     },
     { key: 'total', label: 'Tổng giá trị sau thuế (VND)', value: formatCurrency(sum((r) => r.total_after_tax)) },
-    { key: 'paid', label: 'Đã thu (VND)', value: formatCurrency(sum((r) => r.paid_amount)) },
-    { key: 'outstanding', label: 'Còn phải thu (VND)', value: formatCurrency(sum((r) => r.outstanding_amount)) },
+    {
+      key: 'paid',
+      label: 'Đã thu (VND)',
+      value: formatCurrency(totalPaid),
+      tone: 'green',
+      progress: collectedPercent(totalPaid, sum((r) => r.total_after_tax)),
+    },
+    {
+      key: 'outstanding',
+      label: 'Còn phải thu (VND)',
+      value: formatCurrency(sum((r) => r.outstanding_amount)),
+      tone: 'amber',
+      hint: overdueHint,
+    },
   ]
 }
 
-/** Cây "Truy vấn nhóm": Tất cả hợp đồng → từng trạng thái, kèm số lượng. */
-export function groupTree(rows: Pick<Contract, 'status'>[]): TreeNode[] {
+/** Cây "Truy vấn nhóm": Tất cả hợp đồng → từng trạng thái; thêm nút gốc "Sắp hết hạn" (không cộng vào "Tất cả"). */
+export function groupTree(rows: Pick<Contract, 'status' | 'end_date'>[], today: string = todayIso()): TreeNode[] {
   return [
     {
       key: 'all',
@@ -132,7 +256,21 @@ export function groupTree(rows: Pick<Contract, 'status'>[]): TreeNode[] {
         count: rows.filter((r) => (r.status ?? 'Nháp') === s).length,
       })),
     },
+    {
+      key: EXPIRING_KEY,
+      label: 'Sắp hết hạn',
+      icon: 'lucide-alarm-clock',
+      count: rows.filter((r) => isExpiringSoon(r, today)).length,
+    },
   ]
+}
+
+/** Tích "Sắp hết hạn" thì bỏ mọi trạng thái; tích lại một trạng thái thì bỏ "Sắp hết hạn". */
+export function normalizeGroups(next: string[], prev: string[]): string[] {
+  if (!next.includes(EXPIRING_KEY)) return next
+  if (!prev.includes(EXPIRING_KEY)) return [EXPIRING_KEY]
+  const added = next.filter((k) => k !== EXPIRING_KEY && !prev.includes(k))
+  return added.length ? next.filter((k) => k !== EXPIRING_KEY) : next
 }
 
 export interface PanelFilters {
@@ -141,22 +279,28 @@ export interface PanelFilters {
   customer: string
   responsibleUser: string
   contractType: string
+  onlyOutstanding: boolean
 }
 
 export function emptyFilters(): PanelFilters {
-  return { groups: [...STATUSES], contractNo: '', customer: '', responsibleUser: '', contractType: '' }
+  return { groups: [...STATUSES], contractNo: '', customer: '', responsibleUser: '', contractType: '', onlyOutstanding: false }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function toFrappeFilters(f: PanelFilters): Record<string, any> {
+export function toFrappeFilters(f: PanelFilters, today: string = todayIso()): Record<string, any> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filters: Record<string, any> = {}
-  if (f.groups.length === 0) filters.name = ['in', []]
+  if (f.groups.includes(EXPIRING_KEY)) {
+    const { from, to } = expiringRange(today)
+    filters.status = 'Đang hiệu lực'
+    filters.end_date = ['between', [from, to]]
+  } else if (f.groups.length === 0) filters.name = ['in', []]
   else if (f.groups.length < STATUSES.length) filters.status = ['in', f.groups]
   if (f.contractNo.trim()) filters.contract_no = ['like', `%${f.contractNo.trim()}%`]
   if (f.customer) filters.customer = f.customer
   if (f.responsibleUser) filters.responsible_user = f.responsibleUser
   if (f.contractType) filters.contract_type = f.contractType
+  if (f.onlyOutstanding) filters.outstanding_amount = ['>', 0]
   return filters
 }
 
@@ -167,8 +311,67 @@ export function filtersActive(f: PanelFilters): boolean {
     f.customer !== d.customer ||
     f.responsibleUser !== d.responsibleUser ||
     f.contractType !== d.contractType ||
-    f.groups.length !== d.groups.length
+    f.onlyOutstanding !== d.onlyOutstanding ||
+    f.groups.length !== d.groups.length ||
+    f.groups.includes(EXPIRING_KEY)
   )
+}
+
+// ---- Chi tiết dòng chọn ----
+
+export const detailTitle = (row: { contract_no: string; customer_name?: string | null }): string =>
+  row.customer_name ? `${row.contract_no} · ${row.customer_name}` : row.contract_no
+
+/** Các trường thông tin bên trái; ô trống để '' (DetailPanel tự hiện "Không có"). */
+export function detailFields(row: Contract): DetailField[] {
+  return [
+    { label: 'Số hợp đồng', value: row.contract_no },
+    { label: 'Khách hàng', value: row.customer_name ?? '' },
+    { label: 'Loại hợp đồng', value: row.contract_type_name ?? '' },
+    { label: 'Tên hợp đồng', value: row.contract_title ?? '' },
+    { label: 'Người phụ trách', value: row.responsible_name ?? '' },
+    { label: 'Ngày ký', value: row.signed_date ? formatDate(row.signed_date) : '' },
+    { label: 'Ngày bắt đầu', value: row.start_date ? formatDate(row.start_date) : '' },
+    { label: 'Ngày kết thúc', value: row.end_date ? formatDate(row.end_date) : '' },
+    { label: 'Thời hạn còn lại', value: row.end_date ? remainingText(row.end_date) : '' },
+    { label: 'Ghi chú', value: row.notes ?? '', wide: true },
+  ]
+}
+
+export const PERIOD_LABEL: Record<string, string> = {
+  'Tháng': 'Hàng tháng',
+  'Quý': 'Hàng quý',
+  '6 tháng': '6 tháng một lần',
+  'Năm': 'Hàng năm',
+}
+
+/** "Hàng quý · 4 kỳ" cho hạng mục Định kỳ; hạng mục khác null. */
+export function periodBadge(item: ContractItem, contractEnd?: string | null): string | null {
+  if (item.billing_type !== 'Định kỳ') return null
+  const label = item.period === 'Ngày' ? `Mỗi ${item.period_days ?? 0} ngày` : (PERIOD_LABEL[item.period ?? ''] ?? item.period ?? '')
+  const n = recurringPeriods(item.period ?? '', item.period_start ?? '', item.period_end || contractEnd || '', item.period_days).length
+  return `${label} · ${n} kỳ`
+}
+
+/** "đã thu x/y" theo lịch thu của hạng mục; "Không có" khi chưa có đợt hoặc lịch thu chưa tải được. */
+export function installmentText(itemKey: string | null | undefined, schedules: ContractSchedule[] | null): string {
+  if (!schedules || !itemKey) return NO_VALUE
+  const mine = schedules.filter((s) => s.item_key === itemKey)
+  if (!mine.length) return NO_VALUE
+  return `đã thu ${mine.filter((s) => shortfall(s) <= MONEY_EPS).length}/${mine.length}`
+}
+
+export const itemAfterTax = (item: Pick<ContractItem, 'amount_before_tax' | 'tax_amount'>): number =>
+  Number(item.amount_before_tax ?? 0) + Number(item.tax_amount ?? 0)
+
+export function itemTotals(items: Pick<ContractItem, 'amount_before_tax' | 'tax_amount'>[]): {
+  before: number
+  tax: number
+  after: number
+} {
+  const before = items.reduce((a, i) => a + Number(i.amount_before_tax ?? 0), 0)
+  const tax = items.reduce((a, i) => a + Number(i.tax_amount ?? 0), 0)
+  return { before, tax, after: before + tax }
 }
 
 // ---- Form ----

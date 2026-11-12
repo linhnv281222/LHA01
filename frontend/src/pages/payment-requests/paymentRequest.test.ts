@@ -26,6 +26,7 @@ import {
   toFrappeFilters,
   toPayload,
   validateForm,
+  scheduleNamesOfContract,
   type ItemForm,
   type PaymentRequest,
   type RequestableSchedule,
@@ -49,6 +50,14 @@ function validForm(): RequestForm {
   ensureBlankRow(form.items)
   return form
 }
+
+describe('điền sẵn từ ?contract=', () => {
+  it('chỉ lấy đợt của đúng hợp đồng, giữ thứ tự', () => {
+    const other: RequestableSchedule = { ...ADVANCE, name: 'DT-9', contract: 'HD-2' }
+    expect(scheduleNamesOfContract([LICENSE, other, ADVANCE], 'HD-1')).toEqual(['DT-2', 'DT-1'])
+    expect(scheduleNamesOfContract([other], 'HD-1')).toEqual([])
+  })
+})
 
 describe('cột bảng', () => {
   it('ghim STT và Số đề nghị bên trái, Thao tác bên phải, ba cột tiền có dòng Tổng', () => {
