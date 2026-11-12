@@ -19,6 +19,7 @@ export default {
           pinned: '#FFFFFF',
           selected: '#EDF4FC',
           line: '#EEF0F3',
+          'cell-sel': '#D5E4F7',
         },
       },
     },

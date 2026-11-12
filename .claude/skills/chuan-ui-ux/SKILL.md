@@ -33,11 +33,11 @@ frontend/src/
 
 | Thành phần | Dùng cho | Điểm chính |
 |---|---|---|
-| `SplitLayout` | khung màn danh sách | slot `#group` (cây), `#filters` (ô lọc), mặc định (vùng phải); emit `search` (nút Tìm kiếm/Enter) |
-| `GroupTree` | "Truy vấn nhóm" | `:nodes` (TreeNode[] có `count`), `v-model` = key nút lá đang chọn |
+| `SplitLayout` | khung màn danh sách | slot `#group` (cây), `#filters` (ô lọc), mặc định (vùng phải); emit `search` (nút Tìm kiếm/Enter). Người dùng kéo mép panel trái để giãn 220-480px |
+| `GroupTree` | "Truy vấn nhóm" | `:nodes` (TreeNode[] có `count`, `title` = chữ đầy đủ khi rê chuột), `v-model` = key nút lá đang chọn. Nhiều cấp được (ví dụ Năm → Tháng → Khách hàng → Chứng từ); nhãn trên cây viết ngắn (bỏ "Công ty TNHH/CP", nút lá chỉ ghi số chứng từ), chữ đầy đủ để ở `title` |
 | `PageTitle` | tiêu đề trang | `title`, `count`; slot `#actions`: nút Xuất Excel (outline) rồi nút chính |
-| `StatCards` | dải số liệu (các ô chung một khung) | `:cards` (StatCard[]), `v-model:active` = ô trạng thái đang lọc. StatCard: `tone` (green = tốt như đã thu, amber = cần chú ý như còn phải thu, red = quá hạn), `hint` (dòng phụ), `progress` (0-100, thanh tiến độ) |
-| `DataTable` | bảng danh sách | `:columns` (Column[]), `:rows`, `v-model:selected`, `:loading`, `:external-filter-active`; slot `#cell-<key>`; ref `exportExcel(tenFile)` |
+| `StatCards` | dải số liệu (các ô chung một khung) | `:cards` (StatCard[]), `compact` (chữ nhỏ, dùng trong `DetailPanel #aside`), `v-model:active` = ô trạng thái đang lọc. StatCard: `tone` (green = tốt như đã thu, amber = cần chú ý như còn phải thu, red = quá hạn), `hint` (dòng phụ), `progress` (0-100, thanh tiến độ) |
+| `DataTable` | bảng danh sách, thao tác như Excel | `:columns` (Column[]), `:rows`, `v-model:selected`, `:loading`, `:external-filter-active`; slot `#cell-<key>`; ref `exportExcel(tenFile)`. Người dùng tự kéo giãn cột, khóa cột trái/phải (menu ⋮ ở tiêu đề), chọn chiều cao dòng, kẻ ô dọc; chọn vùng ô và Ctrl+C dán sang Excel, phím tắt như Excel (mũi tên, Shift, Ctrl+A, PageUp/Down, Enter mở chi tiết); thiết lập tự lưu theo từng bảng. Trang KHÔNG tự làm các việc này, không chặn phím trong bảng |
 | `DetailPanel` | chi tiết dòng chọn, dưới bảng | `title`, `:fields` (DetailField[]; trống tự hiện "Không có"); slot `#badge` (StatusBadge cạnh tiêu đề), `#actions` (nút "Cập nhật", quick action), `#aside` (khối bên phải, ví dụ `StatCards` tóm tắt tiền), mặc định (bảng phụ) |
 | `MiniTable` | bảng phụ nhỏ (lịch sử, dòng con trong chi tiết) | `:columns`, `:rows`, `:totals` (dòng Tổng: giá trị theo key cột, cột đầu là nhãn) |
 | `FormPage` | khung form | `title`, `back-to`, `:dirty`; emit `submit`; slot `#actions` (nút chính), `#summary` (số tổng cập nhật khi nhập, ở thanh đáy); ref `allowLeave()` sau khi lưu |
@@ -69,6 +69,11 @@ Hàm: `formatDate`, `formatDateTime`, `formatNumber`, `formatCurrency`, `maskSen
 - Ghim trái cột STT và cột mã/số; ghim phải cột Thao tác.
 - Cột số cùng đơn vị đặt `sum: true` thì bảng tự có dòng Tổng (tính trên dữ liệu đã lọc). Đơn vị ghi trong tiêu đề.
 - Cột ít dùng đặt `hidden: true` (người dùng bật lại bằng nút "Cột").
+- Tiêu đề 2 cấp: các cột liền nhau cùng `group` được gộp ô tiêu đề cấp 1, ví dụ
+  `{ key: 'start_date', label: 'Từ ngày', group: 'Hiệu lực' }, { key: 'end_date', label: 'Đến ngày', group: 'Hiệu lực' }`,
+  hoặc nhóm "Giá trị (VND)" gồm Trước thuế/Thuế/Sau thuế. Cột không có `group` để nguyên. Dùng khi có từ 2 cột cùng chủ đề.
+- `pin` trong khai báo là khóa MẶC ĐỊNH (STT, mã bên trái; Thao tác bên phải); người dùng đổi được bằng menu ⋮.
+  `minWidth` (px) là độ rộng nhỏ nhất khi kéo, mặc định 48.
 - Dữ liệu nhạy cảm (điện thoại, CCCD, số tài khoản): `format: (r) => maskSensitive(r.phone)`.
 
 ## 3. Công thức màn danh sách (theo `ContractTypeList.vue`)
@@ -82,6 +87,11 @@ Hàm: `formatDate`, `formatDateTime`, `formatNumber`, `formatCurrency`, `maskSen
 6. Chọn dòng đồng bộ với `?selected=` để quay lại từ form thì dòng vừa lưu được chọn sẵn.
 7. Chi tiết dòng hiện ngay dưới bảng, có nút "Cập nhật" (quick action sang form) và lịch sử liên quan (`MiniTable`).
 8. Nút trên dòng (Sửa...) dùng slot `#cell-_actions`, thêm `@click.stop` để không chọn dòng.
+
+Truy vấn nhóm của màn chứng từ (hợp đồng, đề nghị thanh toán, hóa đơn, phiếu thu...): cây Năm → Tháng → Đối tác → Chứng từ,
+năm mới nhất trên, mặc định mở năm hiện tại; trạng thái lọc bằng thẻ số liệu và ô ở truy vấn chi tiết, không đưa vào cây.
+Truy vấn chi tiết: đủ các trường người dùng hay tìm (mã/số, đối tác, loại, trạng thái, người phụ trách, khoảng ngày "từ - đến"
+đặt 2 ô cạnh nhau trong `div class="grid grid-cols-2 gap-2"`, khoảng tiền, các ô tích điều kiện nghiệp vụ).
 
 Dữ liệu có nhiều loại với trường khác nhau: ô lọc đầu tiên là "Loại" dạng checkbox kèm số lượng,
 "Chọn tất cả"/"Bỏ chọn hết", mặc định tích loại đầu, luôn giữ ít nhất 1 loại; trường riêng của loại chỉ

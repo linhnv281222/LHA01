@@ -33,6 +33,11 @@ export interface Column<T = Record<string, unknown>> {
   format?: (row: T) => string
   /** Bắt buộc với type "status": trả về StatusDef của dòng. */
   status?: (row: T) => StatusDef | undefined
+  /** Tiêu đề nhóm (cấp 1) khi bảng có tiêu đề 2 cấp, ví dụ "Hiệu lực" cho 2 cột Từ ngày/Đến ngày.
+   *  Các cột liền nhau cùng group được gộp một ô; cột không có group chiếm cả 2 hàng tiêu đề. */
+  group?: string
+  /** Độ rộng nhỏ nhất khi người dùng kéo giãn (px). Mặc định 48. */
+  minWidth?: number
 }
 
 export type SortState = { key: string; dir: 'asc' | 'desc' } | null
@@ -208,4 +213,141 @@ export function downloadCsv<T>(rows: T[], columns: Column<T>[], fileName: string
 export function formatTotal<T>(col: Column<T>, total: number | undefined): string {
   if (total === undefined) return ''
   return col.type === 'currency' ? formatCurrency(total) : formatNumber(total)
+}
+
+// ---------- Thao tác kiểu Excel: tiêu đề 2 cấp, khóa cột, co giãn cột, chiều cao dòng
+
+export type Density = 'compact' | 'normal' | 'comfortable'
+export const ROW_HEIGHT: Record<Density, number> = { compact: 32, normal: 40, comfortable: 52 }
+
+/** Thiết lập bảng của người dùng (lưu trong trình duyệt, theo từng bảng). */
+export interface TableLayout {
+  widths: Record<string, number>
+  hidden: string[]
+  /** Khóa bên trái đến hết cột này (giống Freeze Panes của Excel). null: không khóa. undefined: theo khai báo cột. */
+  leftUntil?: string | null
+  /** Khóa bên phải từ cột này đến cột cuối. */
+  rightFrom?: string | null
+  density: Density
+  wrap: boolean
+  /** Kẻ ô dọc như Excel. */
+  grid: boolean
+}
+
+/** Áp thiết lập của người dùng lên khai báo cột: độ rộng, ghim trái/phải theo kiểu Excel. */
+export function applyLayout<T>(columns: Column<T>[], layout: Pick<TableLayout, 'widths' | 'leftUntil' | 'rightFrom'>): Column<T>[] {
+  const keys = columns.map((c) => c.key)
+  const declaredLeft = columns.map((c) => c.pin === 'left')
+  const declaredRight = columns.map((c) => c.pin === 'right')
+  let leftEnd = -1
+  if (layout.leftUntil === undefined) {
+    // Theo khai báo: các cột ghim trái liền nhau từ đầu.
+    while (leftEnd + 1 < columns.length && declaredLeft[leftEnd + 1]) leftEnd++
+  } else if (layout.leftUntil !== null) {
+    leftEnd = keys.indexOf(layout.leftUntil)
+  }
+  let rightStart = columns.length
+  if (layout.rightFrom === undefined) {
+    while (rightStart - 1 > leftEnd && declaredRight[rightStart - 1]) rightStart--
+  } else if (layout.rightFrom !== null) {
+    const i = keys.indexOf(layout.rightFrom)
+    rightStart = i < 0 ? columns.length : Math.max(i, leftEnd + 1)
+  }
+  return columns.map((c, i) => {
+    const pin: Column<T>['pin'] = i <= leftEnd ? 'left' : i >= rightStart ? 'right' : undefined
+    const w = layout.widths[c.key]
+    return { ...c, pin, width: w ? Math.max(c.minWidth ?? 48, Math.round(w)) : c.width }
+  })
+}
+
+export interface HeaderSegment {
+  /** Nhãn ô tiêu đề cấp 1; rỗng khi là cột không có nhóm (ô chiếm 2 hàng). */
+  group: string
+  keys: string[]
+}
+
+/** Gộp các cột liền nhau cùng group thành ô tiêu đề cấp 1. */
+export function headerSegments<T>(columns: Column<T>[]): HeaderSegment[] {
+  const out: HeaderSegment[] = []
+  for (const c of columns) {
+    const last = out[out.length - 1]
+    if (c.group && last && last.group === c.group) last.keys.push(c.key)
+    else out.push({ group: c.group ?? '', keys: [c.key] })
+  }
+  return out
+}
+
+/** Độ rộng vừa nội dung (nhấp đúp mép tiêu đề): chữ dài nhất + lề, trong khoảng [min, 600]. */
+export function autofitWidth(texts: string[], measure: (s: string) => number, min = 48, padding = 40): number {
+  const widest = texts.reduce((m, s) => Math.max(m, measure(s)), 0)
+  return Math.min(600, Math.max(min, Math.ceil(widest + padding)))
+}
+
+// ---------- Chọn ô, sao chép, phím tắt kiểu Excel
+
+export interface CellPos {
+  r: number
+  c: number
+}
+export interface CellRect {
+  r1: number
+  c1: number
+  r2: number
+  c2: number
+}
+
+export function rectOf(a: CellPos, b: CellPos): CellRect {
+  return { r1: Math.min(a.r, b.r), c1: Math.min(a.c, b.c), r2: Math.max(a.r, b.r), c2: Math.max(a.c, b.c) }
+}
+
+export function inRect(rect: CellRect | null, r: number, c: number): boolean {
+  return !!rect && r >= rect.r1 && r <= rect.r2 && c >= rect.c1 && c <= rect.c2
+}
+
+/** Giá trị của một ô khi sao chép sang Excel: số giữ dạng số thô (Excel cộng được), còn lại là chữ hiển thị. */
+export function copyText<T>(col: Column<T>, row: T, index: number): string {
+  if (col.type === 'index') return String(index + 1)
+  const v = cellValue(col, row)
+  if ((col.type === 'number' || col.type === 'currency') && typeof v === 'number') return String(v)
+  return cellText(col, row).replace(/[\t\r\n]+/g, ' ')
+}
+
+/** Vùng chọn → văn bản tab/xuống dòng (dán thẳng vào Excel, Google Sheets). firstIndex: STT của dòng đầu trang. */
+export function selectionToTsv<T>(rows: T[], columns: Column<T>[], rect: CellRect, withHeader = false, firstIndex = 0): string {
+  const cols = columns.slice(rect.c1, rect.c2 + 1)
+  const lines: string[] = []
+  if (withHeader) lines.push(cols.map((c) => (c.group ? `${c.group} - ${c.label}` : c.label)).join('\t'))
+  for (let r = rect.r1; r <= rect.r2 && r < rows.length; r++) {
+    lines.push(cols.map((c) => copyText(c, rows[r], firstIndex + r)).join('\t'))
+  }
+  return lines.join('\r\n')
+}
+
+/** Di chuyển ô đang chọn theo phím (mũi tên, Home/End, Ctrl+Home/End, Tab). Trả về vị trí mới trong giới hạn bảng. */
+export function moveCell(pos: CellPos, key: string, rows: number, cols: number, ctrl = false): CellPos {
+  let { r, c } = pos
+  switch (key) {
+    case 'ArrowUp':
+      r = ctrl ? 0 : r - 1
+      break
+    case 'ArrowDown':
+      r = ctrl ? rows - 1 : r + 1
+      break
+    case 'ArrowLeft':
+      c = ctrl ? 0 : c - 1
+      break
+    case 'ArrowRight':
+    case 'Tab':
+      c = ctrl ? cols - 1 : c + 1
+      break
+    case 'Home':
+      c = 0
+      if (ctrl) r = 0
+      break
+    case 'End':
+      c = cols - 1
+      if (ctrl) r = rows - 1
+      break
+  }
+  return { r: Math.min(Math.max(0, r), Math.max(0, rows - 1)), c: Math.min(Math.max(0, c), Math.max(0, cols - 1)) }
 }

@@ -5,7 +5,7 @@
 import { TONE_CLASSES } from './status'
 import type { StatCard } from './types'
 
-defineProps<{ cards: StatCard[] }>()
+withDefaults(defineProps<{ cards: StatCard[]; /** Chữ số nhỏ hơn, dùng trong khối hẹp (DetailPanel #aside). */ compact?: boolean }>(), { compact: false })
 const active = defineModel<string | null>('active', { default: null })
 
 const VALUE_TONE: Record<string, string> = {
@@ -31,8 +31,9 @@ function onClick(card: StatCard) {
       v-for="(card, i) in cards"
       :key="card.key"
       :type="card.status ? 'button' : undefined"
-      class="relative min-w-0 px-4 py-3 text-left"
+      class="relative min-w-0 text-left"
       :class="[
+        compact ? 'px-3 py-2' : 'px-4 py-3',
         i > 0 ? 'border-l border-outline-gray-1' : '',
         card.status ? 'cursor-pointer hover:bg-surface-gray-1' : '',
         active === card.key ? 'fn-stat-active' : '',
@@ -50,8 +51,9 @@ function onClick(card: StatCard) {
         {{ card.label }}
       </span>
       <span
-        class="mt-0.5 block truncate text-2xl-semibold tabular-nums"
-        :class="card.tone ? VALUE_TONE[card.tone] : 'text-ink-gray-9'"
+        class="mt-0.5 block truncate tabular-nums"
+        :class="[card.tone ? VALUE_TONE[card.tone] : 'text-ink-gray-9', compact ? 'text-lg-semibold' : 'text-2xl-semibold']"
+        :title="String(card.value)"
       >
         {{ card.value }}
       </span>

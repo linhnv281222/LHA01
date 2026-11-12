@@ -14,7 +14,7 @@ const icon = computed(() => props.node.icon ?? LEVEL_ICONS[Math.min(props.level,
 
 <template>
   <li role="treeitem" :aria-expanded="hasChildren ? isOpen : undefined" :aria-checked="state === 'partial' ? 'mixed' : state === 'checked'">
-    <div class="flex min-h-7 items-center gap-1 rounded-4 pr-1 hover:bg-surface-gray-2" :style="{ paddingLeft: `${level * 14}px` }">
+    <div class="flex min-h-7 items-center gap-1 rounded-4 pr-1 hover:bg-surface-gray-2" :style="{ paddingLeft: `${level * 12}px` }">
       <button
         v-if="hasChildren"
         type="button"
@@ -34,7 +34,7 @@ const icon = computed(() => props.node.icon ?? LEVEL_ICONS[Math.min(props.level,
           @change="emit('toggleCheck', node)"
         />
         <span :class="icon" class="size-4 shrink-0 text-fn-brand" aria-hidden="true" />
-        <span class="truncate">{{ node.label }}</span>
+        <span class="truncate" :title="node.title ?? node.label">{{ node.label }}</span>
         <span v-if="node.count !== undefined" class="ml-auto text-sm tabular-nums text-ink-gray-5">{{ node.count }}</span>
       </label>
     </div>
