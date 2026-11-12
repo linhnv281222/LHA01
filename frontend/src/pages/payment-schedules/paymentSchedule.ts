@@ -19,6 +19,8 @@ export const MSG_SAME_CUSTOMER = 'Chỉ chọn được các đợt của cùng 
 export const MSG_NO_SELECTION = 'Chọn ít nhất một đợt thu.'
 export const MSG_INVOICED = 'Có đợt đã xuất hóa đơn: {0}.'
 export const MSG_PAID = 'Có đợt đã thu đủ: {0}.'
+export const MSG_NOT_REQUIRED_PICK = 'Đợt không cần nghiệm thu: {0}.'
+export const MSG_IN_OTHER_MINUTES_PICK = 'Đợt đã nằm trong biên bản nghiệm thu khác: {0}.'
 export const MSG_LIMIT = 'Có từ 5000 đợt thu, danh sách có thể chưa đủ. Hãy báo người giao việc.'
 
 export function fmt(template: string, ...args: (string | number)[]): string {
@@ -291,11 +293,20 @@ export function actionState(pickedRows: ScheduleListRow[]): {
   invoice: ActionState
   receipt: ActionState
   request: ActionState
+  acceptance: ActionState
 } {
   if (!pickedRows.length) {
     const off = { enabled: false, reason: MSG_NO_SELECTION }
-    return { invoice: off, receipt: { ...off }, request: { ...off } }
+    return { invoice: off, receipt: { ...off }, request: { ...off }, acceptance: { ...off } }
   }
+  // Biên bản nghiệm thu: dừng khi có đợt không cần nghiệm thu hoặc đã nằm trong biên bản (Đã ký), không bỏ bớt đợt.
+  const notRequired = pickedRows.filter((r) => !r.requires_acceptance)
+  const signed = pickedRows.filter((r) => r.requires_acceptance && r.acceptance_status === 'Đã ký')
+  const acceptance = notRequired.length
+    ? { enabled: false, reason: fmt(MSG_NOT_REQUIRED_PICK, names(notRequired)) }
+    : signed.length
+      ? { enabled: false, reason: fmt(MSG_IN_OTHER_MINUTES_PICK, names(signed)) }
+      : { enabled: true, reason: '' }
   const invoiced = pickedRows.filter((r) => (r.invoice_status || 'Chưa xuất') !== 'Chưa xuất')
   const paid = pickedRows.filter((r) => r.payment_status === 'Đã thu' || outstandingOf(r) <= 0)
   const paidState = paid.length ? { enabled: false, reason: fmt(MSG_PAID, names(paid)) } : { enabled: true, reason: '' }
@@ -306,7 +317,18 @@ export function actionState(pickedRows: ScheduleListRow[]): {
     receipt: paidState,
     // Đợt đã "Đã lập" vẫn chọn được: hệ thống báo trùng khi lưu.
     request: { ...paidState },
+    acceptance,
   }
+}
+
+/** Đợt đang chọn nằm trong biên bản Nháp khác (từ get_acceptable_schedules): danh sách "tên đợt (mã biên bản)". */
+export function minutesConflicts(
+  pickedNames: string[],
+  acceptable: { name: string; schedule_name?: string | null; acceptance_minutes?: string | null }[],
+): string[] {
+  return acceptable
+    .filter((s) => pickedNames.includes(s.name) && s.acceptance_minutes)
+    .map((s) => `${s.schedule_name || s.name} (${s.acceptance_minutes})`)
 }
 
 export const toScheduleQuery = (list: string[]) => list.join(',')

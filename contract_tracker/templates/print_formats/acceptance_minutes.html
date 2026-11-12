@@ -1,0 +1,76 @@
+{%- set customer = frappe.db.get_value("Contract Customer", doc.customer, ["customer_name", "tax_code", "address"], as_dict=True) or {} -%}
+<style>
+	.bbnt { font-size: 13px; line-height: 1.5; }
+	.bbnt h2 { text-align: center; margin: 0 0 4px; }
+	.bbnt .center { text-align: center; }
+	.bbnt .parties { width: 100%; margin: 16px 0; }
+	.bbnt .parties td { width: 50%; vertical-align: top; padding: 4px 8px; }
+	.bbnt table.items { width: 100%; border-collapse: collapse; margin-top: 8px; }
+	.bbnt table.items th, .bbnt table.items td { border: 1px solid #333; padding: 4px 6px; }
+	.bbnt .num { text-align: right; }
+	.bbnt .sign { width: 100%; margin-top: 32px; text-align: center; }
+	.bbnt .sign td { width: 50%; padding-bottom: 80px; }
+</style>
+<div class="bbnt">
+	<h2>BIÊN BẢN NGHIỆM THU</h2>
+	<p class="center">Số: {{ doc.name }}<br>Ngày nghiệm thu: {{ doc.get_formatted("minutes_date") }}</p>
+
+	<table class="parties">
+		<tr>
+			<td>
+				<b>Bên A (Khách hàng)</b><br>
+				Tên đơn vị: {{ doc.customer_name or customer.get("customer_name") or "" }}<br>
+				Địa chỉ: {{ customer.get("address") or "" }}<br>
+				Mã số thuế: {{ customer.get("tax_code") or "" }}<br>
+				Người đại diện: {{ doc.party_a_rep or "" }}
+			</td>
+			<td>
+				<b>Bên B</b><br>
+				Tên đơn vị: CÔNG TY LHA<br>
+				Người đại diện: {{ doc.party_b_rep or "" }}
+			</td>
+		</tr>
+	</table>
+
+	<p><b>Nội dung nghiệm thu:</b></p>
+	<p style="white-space: pre-line;">{{ (doc.content or "") | e }}</p>
+
+	<table class="items">
+		<thead>
+			<tr>
+				<th>STT</th>
+				<th>Hợp đồng</th>
+				<th>Nội dung / kỳ</th>
+				<th class="num">Trước thuế (VND)</th>
+				<th class="num">Thuế (VND)</th>
+				<th class="num">Tổng tiền (VND)</th>
+			</tr>
+		</thead>
+		<tbody>
+			{%- for row in doc.items %}
+			<tr>
+				<td class="center">{{ loop.index }}</td>
+				<td>{{ row.contract or "" }}</td>
+				<td>{{ row.item_name or "" }} - {{ row.schedule_name or "" }}{% if row.period_from %} ({{ row.get_formatted("period_from") }} - {{ row.get_formatted("period_to") }}){% endif %}</td>
+				<td class="num">{{ row.get_formatted("amount_before_tax") }}</td>
+				<td class="num">{{ row.get_formatted("tax_amount") }}</td>
+				<td class="num">{{ row.get_formatted("total_amount") }}</td>
+			</tr>
+			{%- endfor %}
+			<tr>
+				<td colspan="3"><b>Tổng cộng</b></td>
+				<td class="num"><b>{{ doc.get_formatted("total_before_tax") }}</b></td>
+				<td class="num"><b>{{ doc.get_formatted("total_tax") }}</b></td>
+				<td class="num"><b>{{ doc.get_formatted("grand_total") }}</b></td>
+			</tr>
+		</tbody>
+	</table>
+	{% if doc.notes %}<p><b>Ghi chú:</b> {{ doc.notes }}</p>{% endif %}
+
+	<table class="sign">
+		<tr>
+			<td><b>Đại diện bên A</b><br><i>(Ký, ghi rõ họ tên) - Chữ ký</i></td>
+			<td><b>Đại diện bên B</b><br><i>(Ký, ghi rõ họ tên) - Chữ ký</i></td>
+		</tr>
+	</table>
+</div>

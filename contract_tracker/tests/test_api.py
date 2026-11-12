@@ -3,6 +3,7 @@ from frappe.tests import IntegrationTestCase
 
 from contract_tracker.api import (
 	contract_no_exists,
+	get_acceptable_schedules,
 	get_billing_permissions,
 	get_contract_permissions,
 	get_open_schedules,
@@ -76,6 +77,27 @@ class TestApi(IntegrationTestCase):
 		frappe.set_user(make_user("ql.quyen.dn@example.com", MANAGER))
 		self.assertTrue(get_billing_permissions()["request_write"])
 
+	def test_acceptable_schedules(self):
+		from contract_tracker.contract_tracker.doctype.acceptance_minutes.test_acceptance_minutes import (
+			make_minutes,
+			need_acceptance,
+		)
+
+		doc, advance, license_ = self._billing()
+		need_acceptance(advance)
+		need_acceptance(license_, value=0)
+		rows = {r.name: r for r in get_acceptable_schedules(doc.customer)}
+		self.assertIn(advance, rows)
+		self.assertNotIn(license_, rows)
+		self.assertIsNone(rows[advance].acceptance_minutes)
+		minutes = make_minutes(doc.customer, [advance]).insert()
+		rows = {r.name: r for r in get_acceptable_schedules(doc.customer)}
+		self.assertEqual(rows[advance].acceptance_minutes, minutes.name)
+		rows = {r.name: r for r in get_acceptable_schedules(doc.customer, minutes=minutes.name)}
+		self.assertIsNone(rows[advance].acceptance_minutes)
+		frappe.set_user(make_user("xem.chon.bbnt@example.com", VIEWER))
+		self.assertIn(advance, [r.name for r in get_acceptable_schedules(doc.customer)])
+
 	def test_requestable_schedules(self):
 		doc, advance, license_ = self._billing()
 		rows = {r.name: r for r in get_requestable_schedules(doc.customer)}
@@ -143,11 +165,13 @@ class TestApi(IntegrationTestCase):
 
 	def test_billing_permissions(self):
 		self.assertEqual(
-			get_billing_permissions(), {"invoice_write": True, "receipt_write": True, "request_write": True}
+			get_billing_permissions(),
+			{"invoice_write": True, "receipt_write": True, "request_write": True, "acceptance_write": True},
 		)
 		frappe.set_user(make_user("quyen.xem.thu@example.com", VIEWER))
 		self.assertEqual(
-			get_billing_permissions(), {"invoice_write": False, "receipt_write": False, "request_write": False}
+			get_billing_permissions(),
+			{"invoice_write": False, "receipt_write": False, "request_write": False, "acceptance_write": False},
 		)
 		self.assertEqual(get_open_schedules("khong-co"), [])
 
