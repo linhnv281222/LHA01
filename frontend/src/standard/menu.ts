@@ -6,6 +6,8 @@ export interface MenuItem {
   route?: string
   icon?: string
   children?: MenuItem[]
+  /** Nhóm của mục cấp 1, ví dụ "Chứng từ": thanh menu hiện nhãn nhóm nhỏ và vạch ngăn trước mục đầu tiên của nhóm. */
+  group?: string
 }
 
 export const MENU_MAX_TOP = 9

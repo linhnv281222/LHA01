@@ -3,14 +3,15 @@
 import type { MenuItem } from '@/standard'
 
 export const MENU: MenuItem[] = [
-  { label: 'Lịch thu tiền', route: '/payment-schedules', icon: 'lucide-calendar-clock' },
   { label: 'Hợp đồng', route: '/contracts', icon: 'lucide-file-text' },
-  { label: 'Đề nghị thanh toán', route: '/payment-requests', icon: 'lucide-file-check' },
-  { label: 'Biên bản nghiệm thu', route: '/acceptance-minutes', icon: 'lucide-file-signature' },
-  { label: 'Hóa đơn', route: '/invoices', icon: 'lucide-receipt-text' },
-  { label: 'Phiếu thu', route: '/receipts', icon: 'lucide-wallet' },
+  { label: 'Lịch thu tiền', route: '/payment-schedules', icon: 'lucide-calendar-clock' },
+  { label: 'Đề nghị thanh toán', route: '/payment-requests', icon: 'lucide-file-check', group: 'Chứng từ' },
+  { label: 'Nghiệm thu', route: '/acceptance-minutes', icon: 'lucide-file-signature', group: 'Chứng từ' },
+  { label: 'Hóa đơn', route: '/invoices', icon: 'lucide-receipt-text', group: 'Chứng từ' },
+  { label: 'Phiếu thu', route: '/receipts', icon: 'lucide-wallet', group: 'Chứng từ' },
   {
     label: 'Danh mục',
+    group: 'Thiết lập',
     icon: 'lucide-folder',
     children: [
       { label: 'Loại hợp đồng', route: '/contract-types', icon: 'lucide-tags' },

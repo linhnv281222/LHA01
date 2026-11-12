@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Thanh trên cùng: logo (về trang chủ), menu chính (dropdown cho mục cha), lời chào, ngôn ngữ,
+// Thanh trên cùng (nền trắng, mục đang mở gạch chân màu chủ đạo): logo, menu chính (dropdown cho mục cha,
+// nhãn nhóm khi mục có group), lời chào, ngôn ngữ,
 // thông báo, đăng xuất. Logo và vị trí các nút giống nhau trên mọi trang.
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
@@ -41,29 +42,41 @@ function logout() {
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 flex h-12 items-center gap-4 bg-fn-brand px-4 text-white shadow-sm">
-    <RouterLink to="/" class="flex items-center gap-2 whitespace-nowrap text-lg-semibold text-white" aria-label="Về trang chủ">
-      <img :src="logoUrl" alt="" class="size-7 rounded-3 ring-1 ring-white/40" />
+  <header class="sticky top-0 z-30 flex h-12 items-center gap-6 border-b border-outline-gray-2 bg-surface-base px-4">
+    <RouterLink to="/" class="flex items-center gap-2 whitespace-nowrap text-lg-semibold text-ink-gray-9" aria-label="Về trang chủ">
+      <img :src="logoUrl" alt="" class="size-7 rounded-4" />
       {{ appTitle }}
     </RouterLink>
 
-    <nav class="flex min-w-0 flex-1 items-center gap-1" aria-label="Menu chính">
-      <template v-for="item in menu" :key="item.label">
+    <nav class="flex h-full min-w-0 flex-1 items-stretch gap-0.5" aria-label="Menu chính">
+      <template v-for="(item, i) in menu" :key="item.label">
+        <span
+          v-if="item.group && item.group !== menu[i - 1]?.group"
+          class="ml-2 flex items-center whitespace-nowrap border-l border-outline-gray-2 pl-3 pr-1 text-sm text-ink-gray-4"
+        >
+          {{ item.group }}
+        </span>
         <Dropdown v-if="item.children?.length" :options="toOptions(item.children) as any">
           <button type="button" class="fn-nav-item" :class="isActive(item) ? 'fn-nav-active' : ''">
             {{ item.label }}
             <span class="lucide-chevron-down size-3.5" aria-hidden="true" />
           </button>
         </Dropdown>
-        <RouterLink v-else :to="item.route ?? '/'" class="fn-nav-item" :class="isActive(item) ? 'fn-nav-active' : ''">
+        <RouterLink
+          v-else
+          :to="item.route ?? '/'"
+          class="fn-nav-item"
+          :class="isActive(item) ? 'fn-nav-active' : ''"
+          :aria-current="isActive(item) ? 'page' : undefined"
+        >
           {{ item.label }}
         </RouterLink>
       </template>
     </nav>
 
-    <div class="flex items-center gap-2 text-base">
-      <span class="hidden whitespace-nowrap lg:inline">Xin chào, <strong>{{ userName }}</strong></span>
-      <span class="rounded-4 px-2 py-1 text-sm-medium ring-1 ring-white/40" title="Ngôn ngữ: Tiếng Việt">VI</span>
+    <div class="flex items-center gap-1 text-base text-ink-gray-7">
+      <span class="mr-1 hidden whitespace-nowrap lg:inline">Xin chào, <strong class="text-ink-gray-9">{{ userName }}</strong></span>
+      <span class="rounded-4 border border-outline-gray-2 px-1.5 py-0.5 text-sm-medium text-ink-gray-6" title="Ngôn ngữ: Tiếng Việt">VI</span>
       <button type="button" class="fn-icon-btn" aria-label="Thông báo" title="Thông báo">
         <span class="lucide-bell size-4" aria-hidden="true" />
       </button>
@@ -79,20 +92,23 @@ function logout() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 32px;
+  height: 100%;
   padding: 0 10px;
-  border-radius: 6px;
-  color: #fff;
+  color: var(--ink-gray-6);
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
+  border-bottom: 2px solid transparent;
 }
 .fn-nav-item:hover {
-  background: rgb(255 255 255 / 0.14);
+  color: var(--ink-gray-9);
+  background: var(--surface-gray-1);
 }
-.fn-nav-active {
-  background: rgb(255 255 255 / 0.22);
-  box-shadow: inset 0 -2px 0 #fff;
+.fn-nav-active,
+.fn-nav-active:hover {
+  color: theme('colors.fn.brand');
+  border-bottom-color: theme('colors.fn.brand');
+  background: transparent;
 }
 .fn-icon-btn {
   display: inline-flex;
@@ -101,8 +117,10 @@ function logout() {
   width: 32px;
   height: 32px;
   border-radius: 6px;
+  color: var(--ink-gray-6);
 }
 .fn-icon-btn:hover {
-  background: rgb(255 255 255 / 0.14);
+  background: var(--surface-gray-2);
+  color: var(--ink-gray-9);
 }
 </style>
