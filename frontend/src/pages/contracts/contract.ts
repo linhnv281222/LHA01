@@ -10,6 +10,7 @@ import {
   lowerFirst,
   type Column,
   type DetailField,
+  type LineColumn,
   type Rules,
   type StatCard,
   type StatusDef,
@@ -1078,6 +1079,108 @@ export function recurringPeriods(
     result.push({ from: toIso(from), to: toIso(to), ratio })
   }
   return result
+}
+
+// ---- Tính tiền trên form (bản TypeScript của round_vnd, recurring_amount, calculate_totals ở contract.py) ----
+
+export interface VatInfo {
+  rate: number
+  is_non_taxable?: 0 | 1 | boolean | null
+}
+
+/** Làm tròn VND nửa lên (xa số 0); toPrecision(15) khử sai số float như Decimal(str(x)) ở server. */
+export function roundVnd(v: number | null | undefined): number {
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return 0
+  return Math.sign(n) * Math.round(Number(Math.abs(n).toPrecision(15)))
+}
+
+/** Trước thuế của một hạng mục theo kiểu thu. Dòng thiếu dữ liệu tính là 0. */
+export function itemBeforeTax(item: ItemForm, contractEnd: string): number {
+  if (item.billing_type === 'Một lần') return Number(item.amount ?? 0)
+  if (item.billing_type === 'Nhiều đợt') return Number(item.item_value ?? 0)
+  const periods = recurringPeriods(item.period, item.period_start, item.period_end || contractEnd, item.period_days)
+  return periods.reduce((acc, p) => acc + roundVnd(Number(item.unit_price ?? 0) * p.ratio), 0)
+}
+
+export function itemAmounts(
+  item: ItemForm,
+  contractEnd: string,
+  vat: VatInfo | undefined,
+): { before: number; tax: number; after: number } {
+  const before = itemBeforeTax(item, contractEnd)
+  const tax = !vat || vat.is_non_taxable ? 0 : roundVnd((before * Number(vat.rate ?? 0)) / 100)
+  return { before, tax, after: before + tax }
+}
+
+/** Tổng của form = cộng các dòng đã làm tròn. */
+export function formTotals(
+  form: Pick<ContractForm, 'items' | 'end_date'>,
+  vatMap: Record<string, VatInfo>,
+): { before: number; tax: number; after: number; count: number } {
+  let before = 0
+  let tax = 0
+  for (const it of form.items) {
+    const a = itemAmounts(it, form.end_date, vatMap[it.vat_rate])
+    before += a.before
+    tax += a.tax
+  }
+  return { before, tax, after: before + tax, count: form.items.length }
+}
+
+/** Xóa dòng; xóa dòng cuối thì tự thêm dòng trống. */
+export function removeItemAt(items: ItemForm[], i: number): void {
+  items.splice(i, 1)
+  if (!items.length) items.push(emptyItem())
+}
+
+/** Thẻ thu tiền ở form sửa; số lấy từ server. */
+export function formStatCards(
+  d: Pick<Contract, 'total_after_tax' | 'total_tax' | 'paid_amount' | 'outstanding_amount' | 'invoiced_amount'>,
+): StatCard[] {
+  const pct = collectedPercent(d.paid_amount, d.total_after_tax)
+  return [
+    {
+      key: 'total',
+      label: 'Tổng sau thuế (VND)',
+      value: formatCurrency(d.total_after_tax ?? 0),
+      hint: `Tiền thuế: ${formatCurrency(d.total_tax ?? 0)}`,
+    },
+    {
+      key: 'paid',
+      label: 'Đã thu (VND)',
+      value: formatCurrency(d.paid_amount ?? 0),
+      tone: 'green',
+      progress: pct,
+      hint: `Đã thu ${formatNumber(pct)}%`,
+    },
+    {
+      key: 'outstanding',
+      label: 'Còn phải thu (VND)',
+      value: formatCurrency(d.outstanding_amount ?? 0),
+      tone: 'amber',
+      hint: `Đã xuất hóa đơn: ${formatCurrency(d.invoiced_amount ?? 0)}`,
+    },
+  ]
+}
+
+export const ITEM_COLUMNS: LineColumn[] = [
+  { key: 'item_name', label: 'Tên hạng mục', required: true, width: 'minmax(180px,2fr)' },
+  { key: 'vat_rate', label: 'Thuế suất', required: true, width: 'minmax(120px,1fr)' },
+  { key: 'billing_type', label: 'Kiểu thu', required: true, width: 'minmax(120px,1fr)' },
+  { key: 'requires_acceptance', label: 'Cần nghiệm thu', align: 'center', width: '120px' },
+  { key: 'before', label: 'Trước thuế (VND)', align: 'right', readonly: true, width: '140px' },
+  { key: 'tax', label: 'Tiền thuế (VND)', align: 'right', readonly: true, width: '130px' },
+  { key: 'after', label: 'Sau thuế (VND)', align: 'right', readonly: true, width: '140px' },
+]
+
+export function milestoneColumns(byPercent: boolean): LineColumn[] {
+  return [
+    { key: 'milestone_name', label: 'Tên mốc', required: true, width: 'minmax(160px,2fr)' },
+    { key: 'value', label: byPercent ? 'Phần trăm' : 'Số tiền', required: true, width: 'minmax(140px,1fr)' },
+    { key: 'due_date', label: 'Ngày đến hạn', required: true, width: '160px' },
+    { key: 'requires_acceptance', label: 'Cần nghiệm thu', align: 'center', width: '120px' },
+  ]
 }
 
 // ---- Tab Lịch thu (đợt thu, chỉ đọc) ----

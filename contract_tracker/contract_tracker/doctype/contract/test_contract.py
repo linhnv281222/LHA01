@@ -162,6 +162,27 @@ class IntegrationTestContract(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			make_contract(items=[item_multi()]).insert()
 
+	def test_form_preview_matches_server_totals(self):
+		"""Các số mà test vitest (contract.test.ts) dùng cho bản xem trước trên form: server tính ra đúng như vậy."""
+		doc = make_contract(items=[item_one_time(amount=10_000_000, vat_rate="10%"), item_one_time(amount=5_000_000, vat_rate="8%")]).insert()
+		self.assertEqual(doc.total_before_tax, 15_000_000)
+		self.assertEqual(doc.total_tax, 1_400_000)
+		self.assertEqual(doc.total_after_tax, 16_400_000)
+
+	def test_form_preview_recurring_last_period_ratio(self):
+		# 01/01 - 15/03/2027: kỳ cuối 15/31 tháng = 483.871; 01/04 - 15/06/2027: kỳ cuối 15/30 = nửa kỳ.
+		def recurring(start, end):
+			return make_contract(
+				end_date=end,
+				items=[item_recurring(vat_rate="10%", unit_price=1_000_000, period="Tháng", period_start=start, period_end=end)],
+			).insert()
+
+		doc = recurring("2027-01-01", "2027-03-15")
+		self.assertEqual(doc.items[0].amount_before_tax, 2_483_871)
+		self.assertEqual(doc.total_tax, 248_387)
+		doc = recurring("2027-04-01", "2027-06-15")
+		self.assertEqual(doc.items[0].amount_before_tax, 2_500_000)
+
 	def test_period_end_defaults_to_contract_end(self):
 		doc = make_contract(end_date="2027-06-30", items=[item_recurring(period_end=None)]).insert()
 		self.assertEqual(str(doc.items[0].period_end), "2027-06-30")
