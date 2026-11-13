@@ -7,7 +7,9 @@ import {
   FnField,
   FormPage,
   FormSection,
+  LineItems,
   PrimaryButton,
+  StatCards,
   focusField,
   formatCurrency,
   serverErrorMessage,
@@ -15,11 +17,21 @@ import {
   type SelectOption,
 } from '@/standard'
 import type { ContractCustomer, ContractType, VATRate } from '@/types/doctypes'
-import ContractItemRows from './ContractItemRows.vue'
+import ContractItemExtra from './ContractItemExtra.vue'
 import ContractScheduleTab from './ContractScheduleTab.vue'
 import {
+  BILLING_TYPES,
   DOCTYPE,
   FORM_RULES,
+  ITEM_COLUMNS,
+  formStatCards,
+  formTotals,
+  itemAmounts,
+  onBillingTypeChange,
+  removeItemAt,
+  type BillingType,
+  type ItemForm,
+  type VatInfo,
   MSG_DUPLICATE,
   applyContractEndDate,
   canActivate,
@@ -73,19 +85,11 @@ watch(
   { immediate: true },
 )
 const status = computed(() => (doc?.doc?.status as string | undefined) ?? 'Nháp')
-const totals = computed(() => ({
-  before: doc?.doc?.total_before_tax ?? 0,
-  tax: doc?.doc?.total_tax ?? 0,
-  after: doc?.doc?.total_after_tax ?? 0,
-  invoiced: doc?.doc?.invoiced_amount ?? 0,
-  paid: doc?.doc?.paid_amount ?? 0,
-  outstanding: doc?.doc?.outstanding_amount ?? 0,
-}))
 
 // Lựa chọn cho các ô chọn.
 const customers = useList<ContractCustomer>({ doctype: 'Contract Customer', fields: ['name', 'customer_name'], orderBy: 'customer_name asc', limit: 5000 })
 const types = useList<ContractType>({ doctype: 'Contract Type', fields: ['name', 'type_name'], orderBy: 'type_name asc', limit: 5000 })
-const vatRates = useList<VATRate>({ doctype: 'VAT Rate', fields: ['name', 'rate_name', 'is_active'], orderBy: 'rate asc', limit: 500 })
+const vatRates = useList<VATRate>({ doctype: 'VAT Rate', fields: ['name', 'rate_name', 'is_active', 'rate', 'is_non_taxable'], orderBy: 'rate asc', limit: 500 })
 const users = useCall<{ name: string; full_name: string }[]>({ url: '/api/v2/method/contract_tracker.api.get_responsible_users' })
 const perms = useCall<{ can_write: boolean }>({ url: '/api/v2/method/contract_tracker.api.get_contract_permissions' })
 const existsCall = useCall<boolean, { contract_no: string }>({
@@ -108,6 +112,24 @@ const vatOptions = computed<SelectOption[]>(() => {
   return options
 })
 
+// Tính tiền ngay ở client (chỉ xem trước; server tự tính khi lưu). Không lọc is_active để dòng cũ vẫn có thuế.
+const vatMap = computed<Record<string, VatInfo>>(() =>
+  Object.fromEntries((vatRates.data ?? []).map((v) => [v.name, { rate: v.rate, is_non_taxable: v.is_non_taxable }])),
+)
+const amounts = computed(() => form.items.map((it) => itemAmounts(it, form.end_date, vatMap.value[it.vat_rate])))
+const sums = computed(() => formTotals(form, vatMap.value))
+const itemTotalsRow = computed(() => ({
+  item_name: `Tổng ${sums.value.count} hạng mục`,
+  before: formatCurrency(sums.value.before),
+  tax: formatCurrency(sums.value.tax),
+  after: formatCurrency(sums.value.after),
+}))
+const BILLING_OPTIONS: SelectOption[] = BILLING_TYPES.map((v) => ({ label: v, value: v }))
+function setBillingType(row: ItemForm, value: string | null) {
+  row.billing_type = (value || 'Một lần') as BillingType
+  onBillingTypeChange(row, form)
+}
+
 // Quyền và khóa sửa.
 const locked = computed(() => isEdit.value && isLocked(status.value))
 const canWrite = computed(() => perms.data?.can_write === true)
@@ -127,8 +149,7 @@ function addItem() {
 }
 function removeItem(i: number) {
   clearItemErrors()
-  form.items.splice(i, 1)
-  if (!form.items.length) form.items.push(emptyItem())
+  removeItemAt(form.items, i)
 }
 
 function clearItemErrors() {
@@ -253,7 +274,7 @@ async function runAction(action: Action) {
       <Tabs v-if="isEdit" v-model="tab" :tabs="TABS" />
 
       <div v-show="!isEdit || tab === 'info'" class="contents">
-      <FormSection title="Thông tin chung" muted>
+      <FormSection title="Thông tin chung">
         <FnField
           v-model="form.contract_no"
           field="contract_no"
@@ -314,29 +335,48 @@ async function runAction(action: Action) {
       </FormSection>
 
       <FormSection title="Hạng mục" :columns="1">
-        <ContractItemRows
-          v-for="(item, i) in form.items"
-          :key="item.item_key"
-          :item="item"
-          :index="i"
-          :errors="errors"
-          :vat-options="vatOptions"
-          :end-date="form.end_date"
-          :disabled="readOnly"
-          @remove="removeItem(i)"
-        />
-        <div v-if="!readOnly">
-          <Button size="md" variant="outline" icon-left="lucide-plus" label="Thêm hạng mục" @click="addItem" />
-        </div>
+        <LineItems
+          :columns="ITEM_COLUMNS"
+          :rows="form.items"
+          row-key="item_key"
+          add-label="Thêm hạng mục"
+          :totals="itemTotalsRow"
+          :readonly="readOnly"
+          @add="addItem"
+          @remove="removeItem"
+        >
+          <template #cell-item_name="{ row, index: i }">
+            <FnField v-model="row.item_name" :field="`items.${i}.item_name`" label="Tên hạng mục" hide-label :maxlength="140" :disabled="readOnly" :error="errors[`items.${i}.item_name`]" />
+          </template>
+          <template #cell-vat_rate="{ row, index: i }">
+            <FnField v-model="row.vat_rate" :field="`items.${i}.vat_rate`" label="Thuế suất" hide-label type="select" :options="vatOptions" :disabled="readOnly" :error="errors[`items.${i}.vat_rate`]" />
+          </template>
+          <template #cell-billing_type="{ row, index: i }">
+            <FnField
+              :model-value="row.billing_type"
+              :field="`items.${i}.billing_type`"
+              label="Kiểu thu"
+              hide-label
+              type="select"
+              :options="BILLING_OPTIONS"
+              :disabled="readOnly"
+              @update:model-value="(v: string | null) => setBillingType(row, v)"
+            />
+          </template>
+          <template #cell-requires_acceptance="{ row, index: i }">
+            <FnField v-model="row.requires_acceptance" :field="`items.${i}.requires_acceptance`" label="Cần nghiệm thu" hide-label type="checkbox" :disabled="readOnly" />
+          </template>
+          <template #cell-before="{ index: i }">{{ formatCurrency(amounts[i]?.before ?? 0) }}</template>
+          <template #cell-tax="{ index: i }">{{ formatCurrency(amounts[i]?.tax ?? 0) }}</template>
+          <template #cell-after="{ index: i }">{{ formatCurrency(amounts[i]?.after ?? 0) }}</template>
+          <template #extra="{ row, index: i }">
+            <ContractItemExtra :item="row" :index="i" :errors="errors" :disabled="readOnly" />
+          </template>
+        </LineItems>
       </FormSection>
 
-      <FormSection title="Giá trị hợp đồng" muted :columns="3">
-        <FnField :model-value="totals.before" field="total_before_tax" label="Giá trị trước thuế" type="currency" unit="VND" readonly hint="Tự tính khi lưu." />
-        <FnField :model-value="totals.tax" field="total_tax" label="Tiền thuế" type="currency" unit="VND" readonly />
-        <FnField :model-value="totals.after" field="total_after_tax" label="Tổng sau thuế" type="currency" unit="VND" readonly :hint="isEdit ? `Hiện tại: ${formatCurrency(totals.after)} VND` : ''" />
-        <FnField :model-value="totals.invoiced" field="invoiced_amount" label="Đã xuất hóa đơn" type="currency" unit="VND" readonly hint="Cập nhật theo hóa đơn." />
-        <FnField :model-value="totals.paid" field="paid_amount" label="Đã thu" type="currency" unit="VND" readonly hint="Cập nhật theo phiếu thu." />
-        <FnField :model-value="totals.outstanding" field="outstanding_amount" label="Còn phải thu" type="currency" unit="VND" readonly />
+      <FormSection v-if="isEdit && doc?.doc" title="Thu tiền" :columns="1">
+        <StatCards compact :cards="formStatCards(doc.doc)" />
       </FormSection>
 
       <FormSection title="Tài liệu và ghi chú" :columns="1">
@@ -384,6 +424,12 @@ async function runAction(action: Action) {
       </div>
 
       <ContractScheduleTab v-if="isEdit && tab === 'schedule'" ref="scheduleTab" :contract="name as string" :status="status" />
+    </template>
+
+    <template #summary>
+      <span>Trước thuế: <b>{{ formatCurrency(sums.before) }}</b> VND</span> ·
+      <span>Thuế: <b>{{ formatCurrency(sums.tax) }}</b> VND</span> ·
+      <span>Sau thuế: <b>{{ formatCurrency(sums.after) }}</b> VND</span>
     </template>
 
     <template #actions>

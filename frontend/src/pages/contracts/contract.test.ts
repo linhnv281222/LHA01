@@ -76,6 +76,22 @@ import {
   type ContractForm,
   type ItemForm,
 } from './contract'
+import {
+  ITEM_COLUMNS,
+  emptyForm as newForm,
+  emptyItem as newItem,
+  emptyMilestone as newMilestone,
+  formStatCards,
+  formTotals,
+  itemAmounts,
+  milestoneColumns,
+  milestoneSummary as msSummary,
+  onBillingTypeChange as changeBilling,
+  removeItemAt,
+  roundVnd,
+  validateExtra as validateAll,
+  type VatInfo,
+} from './contract'
 
 function onceItem(over: Partial<ItemForm> = {}): ItemForm {
   return { ...emptyItem(), item_name: 'Đào tạo', vat_rate: '8%', amount: 5_000_000, due_date: '2027-02-01', ...over }
@@ -1079,5 +1095,99 @@ describe('Contract list: lịch thu, thẻ chi tiết, nhãn kỳ thiếu ngày'
     expect(periodBadge({ ...q, period_start: null } as ContractItem, '2026-12-31')).toBeNull()
     expect(periodBadge({ ...q, period_end: null } as ContractItem, null)).toBeNull()
     expect(periodBadge({ ...q, period_start: '2026-12-31', period_end: '2026-01-01' } as ContractItem, null)).toBeNull()
+  })
+})
+
+describe('tính tiền trên form', () => {
+  const vat: Record<string, VatInfo> = {
+    '10%': { rate: 10 },
+    '8%': { rate: 8 },
+    'Không chịu thuế': { rate: 10, is_non_taxable: 1 },
+  }
+  const once = (amount: number, vat_rate: string) => ({ ...newItem(), amount, vat_rate, item_name: 'A' })
+  const monthly = (start: string, end: string) => ({
+    ...newItem(),
+    billing_type: 'Định kỳ' as const,
+    unit_price: 1_000_000,
+    period: 'Tháng',
+    period_start: start,
+    period_end: end,
+    vat_rate: '10%',
+  })
+
+  it('form mới có 1 dòng trống, tổng bằng 0', () => {
+    const f = newForm()
+    expect(f.items).toHaveLength(1)
+    expect(formTotals(f, {})).toMatchObject({ before: 0, tax: 0, after: 0 })
+  })
+
+  it('Một lần 10.000.000 thuế 10%', () => {
+    expect(itemAmounts(once(10_000_000, '10%'), '', vat['10%'])).toEqual({ before: 10_000_000, tax: 1_000_000, after: 11_000_000 })
+  })
+
+  it('hai hạng mục: 15.000.000 / 1.400.000 / 16.400.000', () => {
+    const f = { ...newForm(), items: [once(10_000_000, '10%'), once(5_000_000, '8%')] }
+    expect(formTotals(f, vat)).toEqual({ before: 15_000_000, tax: 1_400_000, after: 16_400_000, count: 2 })
+  })
+
+  it('không chịu thuế hoặc chưa chọn thuế suất thì thuế 0', () => {
+    expect(itemAmounts(once(10_000_000, 'Không chịu thuế'), '', vat['Không chịu thuế']).tax).toBe(0)
+    expect(itemAmounts(once(10_000_000, ''), '', undefined)).toEqual({ before: 10_000_000, tax: 0, after: 10_000_000 })
+  })
+
+  it('Định kỳ theo quy tắc server: 01/01-15/03/2027 = 2.483.871; 01/04-15/06/2027 = 2.500.000', () => {
+    expect(itemAmounts(monthly('2027-01-01', '2027-03-15'), '', vat['10%'])).toEqual({ before: 2_483_871, tax: 248_387, after: 2_732_258 })
+    expect(itemAmounts(monthly('2027-04-01', '2027-06-15'), '', vat['10%']).before).toBe(2_500_000)
+  })
+
+  it('ngày kết thúc kỳ trống thì lấy ngày kết thúc hợp đồng', () => {
+    expect(itemAmounts(monthly('2027-04-01', ''), '2027-06-15', vat['10%']).before).toBe(2_500_000)
+  })
+
+  it('làm tròn nửa lên, tổng bằng tổng các dòng đã làm tròn', () => {
+    expect(roundVnd(1234.5)).toBe(1235)
+    expect(roundVnd(1234.49)).toBe(1234)
+    expect(roundVnd(-1234.5)).toBe(-1235)
+    expect(itemAmounts(once(12_345, '10%'), '', vat['10%']).tax).toBe(1235)
+    const f = { ...newForm(), items: [once(12_345, '10%'), once(1_234_567, '8%')] }
+    expect(formTotals(f, vat).tax).toBe(1235 + 98_765)
+  })
+
+  it('đổi kiểu thu khỏi Nhiều đợt thì xóa mốc; lệch mốc có độ lệch', () => {
+    const it: ItemForm = { ...newItem(), billing_type: 'Nhiều đợt', item_value: 100, milestone_input: 'Số tiền' }
+    it.milestones = [{ ...newMilestone(it), amount: 60 }]
+    expect(msSummary(it, it.milestones)).toEqual({ total: 60, target: 100, diff: -40 })
+    it.billing_type = 'Một lần'
+    changeBilling(it, { end_date: '' })
+    expect(it.milestones).toEqual([])
+  })
+
+  it('lưu thiếu dữ liệu: đúng câu, đúng khóa, khóa đầu là tên hạng mục', () => {
+    const errors = validateAll(newForm())
+    expect(errors['items.0.item_name']).toBe('Hạng mục dòng 1: vui lòng nhập tên hạng mục.')
+    expect(errors['items.0.vat_rate']).toBeTruthy()
+    expect(errors['items.0.amount']).toBeTruthy()
+    expect(Object.keys(errors)[0]).toBe('items.0.item_name')
+  })
+
+  it('xóa dòng duy nhất thì còn 1 dòng trống', () => {
+    const items = [once(1, '10%')]
+    removeItemAt(items, 0)
+    expect(items).toHaveLength(1)
+    expect(items[0].item_name).toBe('')
+  })
+
+  it('thẻ thu tiền', () => {
+    const cards = formStatCards({ total_after_tax: 11e6, total_tax: 1e6, paid_amount: 5.5e6, outstanding_amount: 5.5e6, invoiced_amount: 8e6 })
+    const [total, paid, out] = cards
+    expect(total.hint).toBe('Tiền thuế: 1.000.000')
+    expect(paid).toMatchObject({ tone: 'green', progress: 50, hint: 'Đã thu 50%' })
+    expect(out).toMatchObject({ tone: 'amber', hint: 'Đã xuất hóa đơn: 8.000.000' })
+  })
+
+  it('cột bảng hạng mục và mốc', () => {
+    expect(ITEM_COLUMNS.filter((c) => c.readonly).map((c) => c.key)).toEqual(['before', 'tax', 'after'])
+    expect(milestoneColumns(true)[1].label).toBe('Phần trăm')
+    expect(milestoneColumns(false)[1].label).toBe('Số tiền')
   })
 })
