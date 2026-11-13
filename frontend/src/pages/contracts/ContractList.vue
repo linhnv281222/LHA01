@@ -51,7 +51,11 @@ import {
   partyLines,
   periodBadge,
   statCards,
+  statusCardKey,
+  statusesFromCard,
   statusOf,
+  defaultTreeExpanded,
+  toggleStatus,
   toFrappeFilters,
   usableSchedules,
   type Contract,
@@ -97,7 +101,7 @@ const list = useList<Contract>({
 })
 const allForTree = useList<Contract>({
   doctype: DOCTYPE,
-  fields: ['name', 'contract_no', 'contract_title', 'customer', 'customer_name', 'signed_date', 'start_date'],
+  fields: ['name', 'contract_no', 'contract_title', 'customer', 'customer_name', 'signed_date', 'start_date', 'status'],
   limit: 5000,
 })
 // Kiểu thu của hạng mục, đọc theo lô một lần (nhiều dòng cho mỗi hợp đồng), không gọi theo từng hợp đồng.
@@ -111,7 +115,6 @@ const kindsByContract = computed(() => {
   if (itemKinds.error || itemKinds.loading || !data || data.length >= ITEM_KIND_LIMIT) return null
   return billingKindsByContract(data)
 })
-const statusOptions: SelectOption[] = STATUSES.map((s) => ({ label: s, value: s }))
 
 // Lựa chọn cho các ô lọc.
 const customers = useList<ContractCustomer>({ doctype: 'Contract Customer', fields: ['name', 'customer_name'], orderBy: 'customer_name asc', limit: 5000 })
@@ -124,17 +127,19 @@ const userOptions = computed<SelectOption[]>(() =>
 )
 
 const rows = computed(() => list.data ?? [])
-// Thẻ "Đang hiệu lực" và ô Trạng thái cùng điều khiển một giá trị (applied.status).
-const activeCard = computed<string | null>({
-  get: () => applied.value.status || null,
-  set: (v) => {
-    draft.value.status = v ?? ''
-    applied.value = { ...applied.value, status: v ?? '' }
-  },
-})
-
 // "Hôm nay" tính một lần khi mở trang.
 const today = todayStr()
+const treeExpanded = defaultTreeExpanded(today)
+
+// Thẻ "Đang hiệu lực" sáng khi chỉ chọn đúng trạng thái đó; bấm thẻ thì đặt lại danh sách trạng thái.
+const activeCard = computed<string | null>({
+  get: () => statusCardKey(applied.value.statuses),
+  set: (v) => {
+    const s = statusesFromCard(v)
+    draft.value.statuses = [...s]
+    applied.value = { ...applied.value, statuses: s }
+  },
+})
 
 // Đợt quá hạn: lọc ở server (đến hạn trước hôm nay, chưa thu đủ), không dùng IN theo tên hợp đồng.
 // Lỗi hay chạm giới hạn thì không tính (thẻ hiện "Không có"); bảng chính vẫn dùng được.
@@ -229,13 +234,24 @@ function exportExcel() {
 <template>
   <SplitLayout :searching="list.loading" @search="search">
     <template #group>
-      <GroupTree v-model="draft.tree" :nodes="groupTree(allForTree.data ?? [])" search-placeholder="Tìm khách hàng, số hợp đồng" />
+      <GroupTree v-model="draft.tree" :default-expanded="treeExpanded" :nodes="groupTree(allForTree.data ?? [])" search-placeholder="Tìm khách hàng, số hợp đồng" />
     </template>
     <template #filters>
       <FnField v-model="draft.contractNo" field="f-contract-no" label="Số hợp đồng" />
       <FnField v-model="draft.customer" field="f-customer" label="Khách hàng" type="select" :options="customerOptions" />
       <FnField v-model="draft.contractType" field="f-contract-type" label="Loại hợp đồng" type="select" :options="typeOptions" />
-      <FnField v-model="draft.status" field="f-status" label="Trạng thái" type="select" :options="statusOptions" />
+      <fieldset class="space-y-1">
+        <legend class="mb-1 text-sm-medium text-ink-gray-7">Trạng thái</legend>
+        <FnField
+          v-for="(s, i) in STATUSES"
+          :key="s"
+          :model-value="draft.statuses.includes(s)"
+          :field="`f-status-${i}`"
+          :label="s"
+          type="checkbox"
+          @update:model-value="(v) => (draft.statuses = toggleStatus(draft.statuses, s, !!v))"
+        />
+      </fieldset>
       <FnField v-model="draft.responsibleUser" field="f-responsible" label="Người phụ trách" type="select" :options="userOptions" />
       <div class="grid grid-cols-2 gap-2">
         <FnField v-model="draft.signedFrom" field="f-signed-from" label="Ngày ký từ" type="date" />
