@@ -19,6 +19,7 @@ const TONE_CHIP: Record<string, string> = {
   teal: 'bg-surface-teal-2 text-ink-teal-7',
   orange: 'bg-surface-orange-2 text-ink-orange-7',
   gray: 'bg-surface-gray-2 text-ink-gray-6',
+  dark: 'bg-surface-gray-9 text-white',
 }
 </script>
 
