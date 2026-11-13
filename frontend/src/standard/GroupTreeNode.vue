@@ -28,11 +28,16 @@ const TONE_CHIP: Record<string, string> = {
       <button
         v-if="hasChildren"
         type="button"
-        class="flex size-6 shrink-0 items-center justify-center rounded-3 text-ink-gray-6 hover:bg-surface-gray-3"
+        class="flex size-6 shrink-0 items-center justify-center rounded-3 text-ink-gray-5 hover:bg-surface-gray-3 hover:text-ink-gray-8"
         :aria-label="isOpen ? `Thu gọn ${node.label}` : `Mở rộng ${node.label}`"
         @click="emit('toggleExpand', node.key)"
       >
-        <span :class="isOpen ? 'lucide-minus' : 'lucide-plus'" class="size-3.5" aria-hidden="true" />
+        <!-- Mũi tên như cây thư mục: chỉ sang phải khi đóng, xoay xuống khi mở. -->
+        <span
+          class="lucide-chevron-right size-4 transition-transform duration-150 motion-reduce:transition-none"
+          :class="isOpen ? 'rotate-90' : ''"
+          aria-hidden="true"
+        />
       </button>
       <span v-else class="w-6 shrink-0" />
       <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-1 text-base text-ink-gray-8">

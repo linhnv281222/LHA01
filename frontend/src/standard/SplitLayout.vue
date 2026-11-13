@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Bố cục chia đôi của màn danh sách:
-// - Panel trái 260px (người dùng kéo mép để giãn 220-480px), cố định khi cuộn, cao bằng màn hình:
+// - Panel trái 260px (người dùng kéo mép để giãn 220-480px, nút ⇤ ở tiêu đề để thu gọn thành dải hẹp),
+//   cố định khi cuộn, cao bằng màn hình:
 //   "Truy vấn nhóm" (ô tìm kiếm TRÊN cây) → kẻ ngang → "Truy vấn chi tiết" (các ô lọc).
 //   Hai tiêu đề dính (sticky). Nút "Tìm kiếm" rộng hết panel, cố định ở đáy. Enter trong ô lọc = Tìm kiếm.
 // - Vùng phải: tiêu đề trang, thẻ số liệu, bảng, chi tiết dòng chọn (do trang tự đặt vào slot mặc định).
@@ -19,6 +20,23 @@ function loadWidth(): number {
   return 260
 }
 const panelWidth = ref(loadWidth())
+// Thu gọn cả panel (để bảng rộng hơn): còn một dải hẹp có nút mở lại; nhớ trong trình duyệt.
+const COLLAPSE_KEY = 'fn-split-panel-collapsed'
+function loadCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const collapsed = ref(loadCollapsed())
+watch(collapsed, (v) => {
+  try {
+    localStorage.setItem(COLLAPSE_KEY, v ? '1' : '0')
+  } catch {
+    /* bỏ qua */
+  }
+})
 watch(panelWidth, (w) => {
   try {
     localStorage.setItem(PANEL_KEY, String(w))
@@ -59,8 +77,31 @@ const emit = defineEmits<{ search: [] }>()
 </script>
 
 <template>
-  <div class="grid min-h-[calc(100vh-3rem)]" :style="{ gridTemplateColumns: `${panelWidth}px minmax(0,1fr)` }">
+  <div class="grid min-h-[calc(100vh-3rem)]" :style="{ gridTemplateColumns: `${collapsed ? 44 : panelWidth}px minmax(0,1fr)` }">
     <aside
+      v-if="collapsed"
+      class="sticky top-12 flex h-[calc(100vh-3rem)] flex-col items-center gap-2 border-r border-outline-gray-2 bg-surface-base py-3"
+      aria-label="Bộ lọc (đang thu gọn)"
+    >
+      <button
+        type="button"
+        class="flex size-8 items-center justify-center rounded-4 text-ink-gray-6 hover:bg-surface-gray-2 hover:text-ink-gray-9"
+        aria-label="Mở panel bộ lọc"
+        title="Mở panel bộ lọc"
+        @click="collapsed = false"
+      >
+        <span class="lucide-panel-left-open size-4" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        class="fn-rail-label text-sm-medium text-ink-gray-6 hover:text-ink-gray-9"
+        @click="collapsed = false"
+      >
+        {{ showGroup ? groupTitle : filterTitle }}
+      </button>
+    </aside>
+    <aside
+      v-else
       class="sticky top-12 flex h-[calc(100vh-3rem)] flex-col border-r border-outline-gray-2 bg-surface-base"
       aria-label="Bộ lọc"
     >
@@ -81,14 +122,37 @@ const emit = defineEmits<{ search: [] }>()
       <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="emit('search')">
         <div class="min-h-0 flex-1 overflow-y-auto">
           <section v-if="showGroup" aria-labelledby="fn-group-title">
-            <h2 id="fn-group-title" class="fn-panel-title">{{ groupTitle }}</h2>
+            <h2 id="fn-group-title" class="fn-panel-title flex items-center justify-between">
+              {{ groupTitle }}
+              <button
+                type="button"
+                class="-my-1 flex size-7 items-center justify-center rounded-4 text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-9"
+                aria-label="Thu gọn panel bộ lọc"
+                title="Thu gọn panel bộ lọc"
+                @click="collapsed = true"
+              >
+                <span class="lucide-panel-left-close size-4" aria-hidden="true" />
+              </button>
+            </h2>
             <div class="space-y-2 px-3 pb-3 pt-2">
               <slot name="group" />
             </div>
           </section>
           <div v-if="showGroup" class="mx-3 border-t border-outline-gray-2" role="separator" />
           <section aria-labelledby="fn-filter-title">
-            <h2 id="fn-filter-title" class="fn-panel-title">{{ filterTitle }}</h2>
+            <h2 id="fn-filter-title" class="fn-panel-title flex items-center justify-between">
+              {{ filterTitle }}
+              <button
+                v-if="!showGroup"
+                type="button"
+                class="-my-1 flex size-7 items-center justify-center rounded-4 text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-9"
+                aria-label="Thu gọn panel bộ lọc"
+                title="Thu gọn panel bộ lọc"
+                @click="collapsed = true"
+              >
+                <span class="lucide-panel-left-close size-4" aria-hidden="true" />
+              </button>
+            </h2>
             <div class="space-y-3 px-3 pb-4 pt-2">
               <slot name="filters" />
             </div>
@@ -116,6 +180,13 @@ const emit = defineEmits<{ search: [] }>()
 </template>
 
 <style scoped>
+.fn-rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
 .fn-panel-resize {
   position: absolute;
   top: 0;
