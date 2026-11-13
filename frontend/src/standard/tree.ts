@@ -1,11 +1,18 @@
 // Logic cây chọn nhóm (panel trái): chọn nhiều, cấp cha hiện trạng thái chọn một phần, lọc theo chữ.
 import { normalizeText } from './table'
 
+export type TreeTone = 'blue' | 'violet' | 'amber' | 'green' | 'teal' | 'orange' | 'gray' | 'dark'
+
 export interface TreeNode {
   key: string
   label: string
   /** Icon lucide của nút, ví dụ "lucide-folder". Không có thì dùng icon theo cấp. */
   icon?: string
+  /** Màu ô icon, để phân biệt cấp bằng mắt (ví dụ năm: blue, tháng: violet, đối tác: amber, chứng từ: gray).
+   *  'dark' (nền đen) dùng cho chứng từ đã kết thúc/đóng, 'green' cho đang chạy. Không có thì icon màu chủ đạo, không nền. */
+  tone?: TreeTone
+  /** Nhãn chữ đậm (thường dùng cho cấp trên cùng, ví dụ Năm). */
+  strong?: boolean
   count?: number
   /** Chữ đầy đủ khi rê chuột (nhãn ngắn trên cây, ví dụ bỏ "Công ty TNHH"). Mặc định = label. */
   title?: string
