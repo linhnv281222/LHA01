@@ -14,6 +14,7 @@ import {
   type StatCard,
   type StatusDef,
   type TreeNode,
+  type TreeTone,
 } from '@/standard'
 import { todayStr } from '@/pages/payment-schedules/paymentSchedule'
 
@@ -268,7 +269,10 @@ export function statCards(
 
 // ---- Cây "Truy vấn nhóm": Năm → Tháng → Khách hàng → Hợp đồng ----
 
-export type TreeRow = Pick<Contract, 'name' | 'contract_no' | 'contract_title' | 'customer' | 'customer_name' | 'signed_date' | 'start_date'>
+export type TreeRow = Pick<Contract, 'name' | 'contract_no' | 'contract_title' | 'customer' | 'customer_name' | 'signed_date' | 'start_date'> & {
+  /** Có thể rỗng hoặc giá trị không nhận ra (tính như Nháp). */
+  status?: string | null
+}
 
 /** Ngày xếp nhóm: ngày ký, trống thì ngày bắt đầu. */
 export const groupDate = (r: Pick<Contract, 'signed_date' | 'start_date'>): string => r.signed_date || r.start_date || ''
@@ -281,6 +285,21 @@ export function shortCustomerName(name: string | null | undefined): string {
   const short = full.replace(/^công ty\s+(tnhh|cp|cổ phần)\b\s*/i, '').trim()
   return short || full
 }
+
+/** Tone nút hợp đồng theo trạng thái: đang hiệu lực green, đã kết thúc/đóng dark, còn lại (Nháp, rỗng, lạ) gray. */
+export function contractTreeTone(status?: string | null): TreeTone {
+  if (status === 'Đang hiệu lực') return 'green'
+  if (status === 'Hết hạn' || status === 'Đã thanh lý' || status === 'Đã hủy') return 'dark'
+  return 'gray'
+}
+
+/** "Số HĐ · Tên hợp đồng · Trạng thái"; phần rỗng bỏ đi, không có dấu phân cách thừa. */
+export function contractTreeTitle(r: Pick<TreeRow, 'contract_no' | 'contract_title' | 'status'>): string {
+  return [r.contract_no, r.contract_title?.trim(), r.status].filter(Boolean).join(' · ')
+}
+
+/** Các nút mở sẵn của cây: chỉ năm hiện tại. */
+export const defaultTreeExpanded = (today: string = todayStr()): string[] => [`y:${today.slice(0, 4)}`]
 
 const byLabel = (a: TreeNode, b: TreeNode) => a.label.localeCompare(b.label, 'vi', { numeric: true })
 
@@ -306,13 +325,15 @@ export function groupTree(rows: TreeRow[]): TreeNode[] {
       label: shortCustomerName(items[0].customer_name || c),
       title: items[0].customer_name || c,
       icon: 'lucide-building-2',
+      tone: 'amber',
       count: items.length,
       children: items
         .map<TreeNode>((r) => ({
           key: r.name,
           label: r.contract_no,
-          title: r.contract_title ? `${r.contract_no} · ${r.contract_title}` : r.contract_no,
+          title: contractTreeTitle(r),
           icon: 'lucide-file-text',
+          tone: contractTreeTone(r.status),
           count: 1,
         }))
         .sort(byLabel),
@@ -322,6 +343,7 @@ export function groupTree(rows: TreeRow[]): TreeNode[] {
       key: `m:${ym}`,
       label: `Tháng ${ym.slice(5)}/${ym.slice(0, 4)}`,
       icon: 'lucide-calendar-days',
+      tone: 'violet',
       count: list.length,
       children: customers,
     }
@@ -331,14 +353,30 @@ export function groupTree(rows: TreeRow[]): TreeNode[] {
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([y, months]) => {
       const children = [...months.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([ym, list]) => monthNode(ym, list))
-      return { key: `y:${y}`, label: `Năm ${y}`, icon: 'lucide-calendar', count: children.reduce((a, c) => a + (c.count ?? 0), 0), children }
+      return { key: `y:${y}`, label: `Năm ${y}`, icon: 'lucide-calendar-range', tone: 'blue', strong: true, count: children.reduce((a, c) => a + (c.count ?? 0), 0), children }
     })
   const none = years.get('')?.get('')
   if (none?.length) {
     const m = monthNode('none', none)
-    nodes.push({ key: NO_DATE_KEY, label: 'Không có ngày', icon: 'lucide-calendar', count: none.length, children: m.children })
+    nodes.push({ key: NO_DATE_KEY, label: 'Không có ngày', icon: 'lucide-calendar-x', tone: 'gray', strong: true, count: none.length, children: m.children })
   }
   return nodes
+}
+
+export const ACTIVE_STATUS = 'Đang hiệu lực'
+
+/** Thẻ "Đang hiệu lực" sáng khi và chỉ khi đang chọn đúng một mình trạng thái đó. */
+export const statusCardKey = (statuses: string[]): string | null =>
+  statuses.length === 1 && statuses[0] === ACTIVE_STATUS ? ACTIVE_STATUS : null
+
+export const statusesFromCard = (key: string | null): string[] => (key ? [key] : [])
+
+/** Tích/bỏ một trạng thái; trả mảng mới, luôn theo thứ tự STATUSES. */
+export function toggleStatus(statuses: string[], s: string, on: boolean): string[] {
+  const set = new Set(statuses)
+  if (on) set.add(s)
+  else set.delete(s)
+  return STATUSES.filter((x) => set.has(x))
 }
 
 /** Không tích nút nào thì giữ hết; ngược lại chỉ giữ hợp đồng có name trong tập khóa lá đang tích. */
@@ -365,7 +403,7 @@ export interface PanelFilters {
   contractNo: string
   customer: string
   contractType: string
-  status: string
+  statuses: string[]
   responsibleUser: string
   signedFrom: string
   signedTo: string
@@ -385,7 +423,7 @@ export function emptyFilters(): PanelFilters {
     contractNo: '',
     customer: '',
     contractType: '',
-    status: '',
+    statuses: [],
     responsibleUser: '',
     signedFrom: '',
     signedTo: '',
@@ -417,7 +455,8 @@ export function toFrappeFilters(f: PanelFilters): Record<string, any> {
   if (f.contractNo.trim()) filters.contract_no = ['like', `%${f.contractNo.trim()}%`]
   if (f.customer) filters.customer = f.customer
   if (f.contractType) filters.contract_type = f.contractType
-  if (f.status) filters.status = f.status
+  if (f.statuses.length === 1) filters.status = f.statuses[0]
+  else if (f.statuses.length > 1) filters.status = ['in', [...f.statuses]]
   if (f.responsibleUser) filters.responsible_user = f.responsibleUser
   const signed = range(f.signedFrom, f.signedTo)
   if (signed) filters.signed_date = signed

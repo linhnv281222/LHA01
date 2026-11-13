@@ -38,6 +38,11 @@ import {
   milestoneSummary,
   onBillingTypeChange,
   statusOf,
+  contractTreeTone,
+  defaultTreeExpanded,
+  statusCardKey,
+  statusesFromCard,
+  toggleStatus,
   toFrappeFilters,
   toPayload,
   collectedPercent,
@@ -380,7 +385,7 @@ describe('toPayload / fromDoc', () => {
 describe('danh sách', () => {
   it('toFrappeFilters theo từng ô', () => {
     expect(toFrappeFilters(emptyFilters())).toEqual({})
-    const f = { ...emptyFilters(), contractNo: ' 001 ', customer: 'KH-1', responsibleUser: 'a@x.com', contractType: 'DV', status: 'Đang hiệu lực' }
+    const f = { ...emptyFilters(), contractNo: ' 001 ', customer: 'KH-1', responsibleUser: 'a@x.com', contractType: 'DV', statuses: ['Đang hiệu lực'] }
     expect(toFrappeFilters(f)).toEqual({
       contract_no: ['like', '%001%'],
       customer: 'KH-1',
@@ -388,6 +393,38 @@ describe('danh sách', () => {
       contract_type: 'DV',
       status: 'Đang hiệu lực',
     })
+  })
+
+  it('lọc trạng thái: 0, 1, 2 trạng thái', () => {
+    expect(toFrappeFilters({ ...emptyFilters(), statuses: [] })).toEqual({})
+    expect(toFrappeFilters({ ...emptyFilters(), statuses: ['Hết hạn'] })).toEqual({ status: 'Hết hạn' })
+    expect(toFrappeFilters({ ...emptyFilters(), statuses: ['Hết hạn', 'Đã thanh lý'] })).toEqual({
+      status: ['in', ['Hết hạn', 'Đã thanh lý']],
+    })
+    expect(emptyFilters().statuses).toEqual([])
+    expect(filtersActive({ ...emptyFilters(), statuses: [] })).toBe(false)
+  })
+
+  it('thẻ Đang hiệu lực: sáng khi chỉ chọn một mình nó', () => {
+    expect(statusCardKey(['Đang hiệu lực'])).toBe('Đang hiệu lực')
+    expect(statusCardKey(['Đang hiệu lực', 'Hết hạn'])).toBeNull()
+    expect(statusCardKey(['Hết hạn'])).toBeNull()
+    expect(statusCardKey([])).toBeNull()
+    expect(statusesFromCard('Đang hiệu lực')).toEqual(['Đang hiệu lực'])
+    expect(statusesFromCard(null)).toEqual([])
+  })
+
+  it('toggleStatus: thêm, không lặp, bỏ, theo thứ tự STATUSES', () => {
+    expect(toggleStatus([], 'Hết hạn', true)).toEqual(['Hết hạn'])
+    expect(toggleStatus(['Hết hạn'], 'Hết hạn', true)).toEqual(['Hết hạn'])
+    expect(toggleStatus(['Hết hạn'], 'Nháp', true)).toEqual(['Nháp', 'Hết hạn'])
+    expect(toggleStatus(['Nháp', 'Hết hạn'], 'Nháp', false)).toEqual(['Hết hạn'])
+  })
+
+  it('defaultTreeExpanded: chỉ năm hiện tại', () => {
+    const open = defaultTreeExpanded('2026-11-13')
+    expect(open).toEqual(['y:2026'])
+    expect(open).not.toContain('y:2025')
   })
 
   it('khoảng Ngày ký và Tổng sau thuế: hai đầu, một đầu', () => {
@@ -410,7 +447,7 @@ describe('danh sách', () => {
       { contractNo: 'x' },
       { customer: 'KH-1' },
       { contractType: 'DV' },
-      { status: 'Nháp' },
+      { statuses: ['Nháp'] },
       { responsibleUser: 'a' },
       { signedFrom: '2026-01-01' },
       { signedTo: '2026-01-01' },
@@ -428,7 +465,8 @@ describe('danh sách', () => {
   })
 
   describe('cây 4 cấp', () => {
-    const R = (name: string, no: string, cust: string, custName: string, signed: string | null, start: string, title = 'Tên ' + no) => ({
+    const R = (name: string, no: string, cust: string, custName: string, signed: string | null, start: string, title: string | null = 'Tên ' + no, status: string | null = 'Đang hiệu lực') => ({
+      status,
       name,
       contract_no: no,
       contract_title: title,
@@ -439,7 +477,7 @@ describe('danh sách', () => {
     })
     const rows = [
       R('HD-01', 'HD-01', 'K1', 'Công ty TNHH ABC', '2026-11-05', '2026-11-10'),
-      R('HD-02', 'HD-02', 'K1', 'Công ty TNHH ABC', '2026-11-20', '2026-11-20'),
+      R('HD-02', 'HD-02', 'K1', 'Công ty TNHH ABC', '2026-11-20', '2026-11-20', null, 'Nháp'),
       R('HD-03', 'HD-03', 'K2', 'Công ty CP X', '2026-03-02', '2026-03-02'),
       R('HD-04', 'HD-04', 'K3', 'Tập đoàn Z', null, '2025-09-15'),
     ]
@@ -466,11 +504,53 @@ describe('danh sách', () => {
       const cust = tree[0].children![0].children![0]
       expect(cust).toMatchObject({ key: 'c:2026-11:K1', label: 'ABC', title: 'Công ty TNHH ABC', count: 2 })
       expect(cust.children?.map((c) => [c.key, c.label, c.title])).toEqual([
-        ['HD-01', 'HD-01', 'HD-01 · Tên HD-01'],
-        ['HD-02', 'HD-02', 'HD-02 · Tên HD-02'],
+        ['HD-01', 'HD-01', 'HD-01 · Tên HD-01 · Đang hiệu lực'],
+        ['HD-02', 'HD-02', 'HD-02 · Nháp'],
       ])
       expect(tree[0].children![1].children![0].label).toBe('X')
       expect(tree[1].children![0].children![0].label).toBe('Tập đoàn Z')
+    })
+
+    it('icon, tone, đậm theo cấp', () => {
+      expect(tree[0]).toMatchObject({ icon: 'lucide-calendar-range', tone: 'blue', strong: true })
+      const month = tree[0].children![0]
+      expect(month).toMatchObject({ icon: 'lucide-calendar-days', tone: 'violet' })
+      expect(month.strong).toBeFalsy()
+      const cust = month.children![0]
+      expect(cust).toMatchObject({ icon: 'lucide-building-2', tone: 'amber' })
+      expect(cust.strong).toBeFalsy()
+      expect(cust.children![0]).toMatchObject({ icon: 'lucide-file-text', tone: 'green' })
+      expect(cust.children![0].strong).toBeFalsy()
+      expect(cust.children![1].tone).toBe('gray')
+    })
+
+    it('Không có ngày: calendar-x, gray, đậm', () => {
+      const t = groupTree([R('HD-09', 'HD-09', 'K1', 'ABC', null, '')])
+      expect(t[0]).toMatchObject({ key: 'y:none', label: 'Không có ngày', icon: 'lucide-calendar-x', tone: 'gray', strong: true })
+    })
+
+    it.each([
+      ['Đang hiệu lực', 'green'],
+      ['Hết hạn', 'dark'],
+      ['Đã thanh lý', 'dark'],
+      ['Đã hủy', 'dark'],
+      ['Nháp', 'gray'],
+      ['', 'gray'],
+      [null, 'gray'],
+      ['Lạ', 'gray'],
+    ])('tone nút hợp đồng theo trạng thái %s', (status, tone) => {
+      expect(contractTreeTone(status)).toBe(tone)
+      const t = groupTree([R('H', 'H', 'K', 'K', '2026-01-01', '2026-01-01', 'T', status)])
+      expect(t[0].children![0].children![0].children![0].tone).toBe(tone)
+    })
+
+    it('title: đủ 3 phần, không tên, không trạng thái', () => {
+      const leaf = (title: string | null, status: string | null) =>
+        groupTree([R('H', 'HD-05', 'K', 'K', '2026-01-01', '2026-01-01', title, status)])[0].children![0].children![0].children![0]
+      expect(leaf('Tên', 'Hết hạn').title).toBe('HD-05 · Tên · Hết hạn')
+      expect(leaf(null, 'Nháp').title).toBe('HD-05 · Nháp')
+      expect(leaf('Tên', null).title).toBe('HD-05 · Tên')
+      expect(leaf('Tên', 'Hết hạn').label).toBe('HD-05')
     })
 
     it('shortCustomerName', () => {
