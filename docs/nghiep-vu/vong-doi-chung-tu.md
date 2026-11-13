@@ -393,7 +393,7 @@ Cộng tay: trước thuế 30 + 70 + 4×15 + 5 = **165.000.000**; thuế 3 + 7 
 | Danh sách hợp đồng (thẻ, chỉ có HD-001) | Đang hiệu lực 1/1; Tổng giá trị 175.400.000; Đã thu 0; Còn phải thu 175.400.000 |
 | Cộng tay | Σ đợt 175.400.000 = tổng hợp đồng 175.400.000 ✔ |
 
-**A1. Lập đề nghị gộp Tạm ứng + Quý 1/2027 (Nháp)**
+**A1. Lập đề nghị gộp Tạm ứng + Quý 1/2027 (Nháp, ngày 03/01/2027)**
 
 | Màn | Con số mong đợi |
 |---|---|
@@ -406,7 +406,7 @@ Cộng tay: trước thuế 30 + 70 + 4×15 + 5 = **165.000.000**; thuế 3 + 7 
 
 (Sau đó "Đánh dấu đã gửi": lớp (a) thành Đã gửi; số liệu không đổi.)
 
-**A2. Ghi nhận hóa đơn gộp Tạm ứng + Quý 1/2027**
+**A2. Ghi nhận hóa đơn gộp Tạm ứng + Quý 1/2027 (ngày 03/01/2027, trước hạn Tạm ứng 05/01 nên Quá hạn 0)**
 
 | Màn | Con số mong đợi |
 |---|---|
@@ -457,8 +457,8 @@ Xuất phát từ A0 (chưa có đề nghị, hóa đơn). §3.7 cho phép thu t
 | Đợt thu | Không đổi: mọi đợt `Chưa thu`, đã thu 0 |
 | Hợp đồng | Đã xuất 0; đã thu 0; còn phải thu 175.400.000 |
 | Đề nghị / Hóa đơn | Chưa có |
-| Lịch thu (thẻ, kỳ 01/2027) | Phải thu 48.000.000; Đã thu 0; Quá hạn 0; Chưa xuất hóa đơn 175.400.000 · 7 đợt |
-| Cộng tay | Tiền của khách chưa nằm ở đợt nào: số "đã thu" của hợp đồng = 0 |
+| Lịch thu (thẻ, kỳ 01/2027, ngày 10/01) | Phải thu 48.000.000; Đã thu 0; **Quá hạn 33.000.000 · 1 đợt** (Tạm ứng hạn 05/01, chưa thu đồng nào, `is_overdue` = 1); Chưa xuất hóa đơn 175.400.000 · 7 đợt |
+| Cộng tay | Tiền của khách chưa nằm ở đợt nào: số "đã thu" của hợp đồng = 0. Tiền chưa phân bổ **không làm giảm** số quá hạn: Tạm ứng vẫn còn nợ 33.000.000 sau hạn 05/01 |
 
 **B2. Sửa phiếu: phân bổ Tạm ứng 33.000.000 + Quý 1 15.000.000**
 
@@ -495,16 +495,17 @@ Xuất phát từ A0 (chưa có đề nghị, hóa đơn). §3.7 cho phép thu t
 
 Xuất phát từ **A2** (hóa đơn 48.000.000 đã Hiệu lực, chưa thu): Tạm ứng và Quý 1 đã có hóa đơn nên là "đợt có chứng từ" (giữ nguyên). Hợp đồng đang hiệu lực nên sửa được (§5.2, `contract.py:152-160`).
 
-**C1. Đổi "Đào tạo" từ 5.000.000 lên 6.000.000** (đợt Đào tạo chưa có chứng từ → sinh lại)
+**C1. Đổi "Đào tạo" từ 5.000.000 lên 6.000.000** (ngày 03/01/2027; đợt Đào tạo chưa có chứng từ → sinh lại)
 
 | Màn | Con số mong đợi |
 |---|---|
 | Đợt thu | Đợt Đào tạo cũ bị xóa, **sinh đợt mới** (mã khác): trước thuế 6.000.000; thuế 8% = 480.000; tổng **6.480.000**. Tạm ứng, Quý 1 giữ nguyên (đã hóa đơn). Các đợt chưa chứng từ khác sinh lại với số cũ (không đổi) |
 | Hợp đồng | Trước thuế 166.000.000; thuế 10.480.000; **sau thuế 176.480.000**; đã xuất 48.000.000; đã thu 0; còn phải thu 176.480.000 |
 | Đề nghị, Hóa đơn | Không đổi (48.000.000); nếu đợt Đào tạo đã nằm trong một đề nghị thì dòng đề nghị sẽ trỏ vào đợt cũ đã bị xóa (lệch #9) |
-| Cộng tay | Σ đợt = 33.000.000 + 77.000.000 + 60.000.000 + 6.480.000 = **176.480.000** = tổng hợp đồng ✔ |
+| Lịch thu (thẻ, kỳ 01/2027, ngày 03/01) | Phải thu 48.000.000; Đã thu 0; Quá hạn 0; Chưa xuất hóa đơn **128.480.000 · 5 đợt** (Nghiệm thu 77.000.000 + Quý 2, 3, 4 = 45.000.000 + Đào tạo 6.480.000) |
+| Cộng tay | Σ đợt = 33.000.000 + 77.000.000 + 60.000.000 + 6.480.000 = **176.480.000** = tổng hợp đồng ✔; 176.480.000 − 48.000.000 = 128.480.000 ✔ |
 
-**C2. Tiếp theo: đổi giá trị hạng mục "Triển khai" từ 100.000.000 lên 120.000.000 (mốc 30% / 70%)**
+**C2. Tiếp theo (ngày 03/01/2027): đổi giá trị hạng mục "Triển khai" từ 100.000.000 lên 120.000.000 (mốc 30% / 70%)**
 
 Tạm ứng đã có hóa đơn nên **giữ nguyên 33.000.000**; Nghiệm thu chưa chứng từ nên **sinh lại**: 120.000.000 − 36.000.000 = 84.000.000, thuế 8.400.000, tổng **92.400.000**.
 
@@ -516,14 +517,15 @@ Tạm ứng đã có hóa đơn nên **giữ nguyên 33.000.000**; Nghiệm thu 
 | Hợp đồng (đã xuất / thu / còn) | Đã xuất 48.000.000; đã thu 0; **còn phải thu 198.480.000** | Đã xuất 48.000.000; đã thu 0; **còn phải thu 191.880.000** |
 | Lệch tổng hợp đồng − Σ đợt | **6.600.000** (= 6.000.000 chênh trước thuế + 600.000 thuế): **phát hiện lỗi lệch** | 0 |
 | Cảnh báo | Không có | "Triển khai: giá trị hạng mục 120.000.000, các đợt hiện tổng 114.000.000 trước thuế (Tạm ứng giữ giá cũ). Lệch 6.000.000" |
+| Lịch thu (thẻ, ngày 03/01) | Phải thu kỳ 01/2027 48.000.000; Quá hạn 0; Chưa xuất hóa đơn **143.880.000 · 5 đợt** (Nghiệm thu 92.400.000 + Quý 2, 3, 4 = 45.000.000 + Đào tạo 6.480.000) | Như bên trái (thẻ tính từ đợt) |
 | Đề nghị, Hóa đơn, Phiếu thu | Không đổi (48.000.000) | Không đổi |
-| Cộng tay | 198.480.000 − 191.880.000 = 6.600.000 | 191.880.000 = Σ đợt ✔ |
+| Cộng tay | 143.880.000 = 191.880.000 − 48.000.000 ✔; 198.480.000 − 191.880.000 = 6.600.000 | 191.880.000 = Σ đợt ✔ |
 
 Ghi chú: 6.000.000 chênh là phần Tạm ứng 30% của 20.000.000 phát sinh thêm, **không có đợt nào thu**. Cách xử lý (đợt bổ sung, chặn sửa, hay thêm hạng mục bù) chờ anh Linh quyết ở câu 7. Theo phương án khuyến nghị: người dùng thêm hạng mục "Triển khai bổ sung" 6.000.000 (hoặc theo cách anh Linh chọn) để thu phần chênh.
 
 ### D. Hủy
 
-**D1. Hủy hóa đơn chưa thu** (xuất phát từ A2: hóa đơn 48.000.000, chưa có phiếu thu)
+**D1. Hủy hóa đơn chưa thu** (xuất phát từ A2, thực hiện ngày 04/01/2027, trước hạn Tạm ứng 05/01: hóa đơn 48.000.000, chưa có phiếu thu)
 
 | Màn | Con số mong đợi |
 |---|---|
