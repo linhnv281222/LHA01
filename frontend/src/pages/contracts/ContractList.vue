@@ -357,6 +357,7 @@ async function runRevert(no: string) {
 </script>
 
 <template>
+  <div class="max-w-full overflow-x-clip">
   <SplitLayout :searching="list.loading" @search="search">
     <template #group>
       <GroupTree v-model="draft.tree" :default-expanded="treeExpanded" :nodes="groupTree(allForTree.data ?? [])" search-placeholder="Tìm khách hàng, số hợp đồng" />
@@ -436,9 +437,9 @@ async function runRevert(no: string) {
       {{ actionError }}
     </p>
 
-    <div v-if="canDelete" class="flex flex-wrap items-center gap-2">
+    <div v-if="canDelete" class="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <FnField v-model="allChecked" field="select-all" label="Chọn tất cả (đang lọc)" type="checkbox" :disabled="allNames === null" />
-      <span v-if="allNames === null" class="text-sm text-ink-gray-5">Lọc bớt còn tối đa {{ MAX_DELETE }} hợp đồng để chọn tất cả.</span>
+      <span v-if="allNames === null" class="min-w-0 break-words text-sm text-ink-gray-5">Lọc bớt còn tối đa {{ MAX_DELETE }} hợp đồng để chọn tất cả.</span>
       <template v-if="checked.length">
         <span class="text-base-semibold text-ink-gray-8" role="status">Đã chọn {{ checked.length }}</span>
         <Button size="sm" variant="solid" theme="red" icon-left="lucide-trash-2" label="Xóa đã chọn" :loading="deleting" :disabled="deleting" @click="askDelete(checked)" />
@@ -580,4 +581,5 @@ async function runRevert(no: string) {
       <p v-else class="text-base text-ink-gray-7">Không có hợp đồng nào bị bỏ qua.</p>
     </Dialog>
   </SplitLayout>
+  </div>
 </template>
