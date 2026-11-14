@@ -6,7 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import flt, strip_html
 
-from contract_tracker.contract_tracker.doctype.contract.contract import TOLERANCE
+from contract_tracker.contract_tracker.doctype.contract.contract import (
+	MSG_DELETE_NOT_DRAFT,
+	STATUS_DRAFT,
+	TOLERANCE,
+)
 from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import (
 	BILLABLE_CONTRACT_STATUSES,
 	active_invoice_by_schedule,
@@ -96,10 +100,15 @@ def delete_contracts(names) -> dict:
 		else:
 			frappe.db.savepoint("delete_contract")
 			try:
+				# Khóa dòng Contract trước khi kiểm, để không chạy chồng với Kích hoạt (chuẩn A4).
+				status = frappe.db.get_value("Contract", name, "status", for_update=True)
+				if status != STATUS_DRAFT:
+					skipped.append({"name": name, "reason": _(MSG_DELETE_NOT_DRAFT)})
+					continue
 				# Không ignore_permissions, không force: để kiểm quyền, liên kết và chạy on_trash.
 				frappe.delete_doc("Contract", name)
 				deleted.append(name)
-			except frappe.ValidationError as e:
+			except (frappe.ValidationError, frappe.PermissionError) as e:
 				frappe.db.rollback(save_point="delete_contract")
 				skipped.append({"name": name, "reason": strip_html(str(e))})
 				# Lỗi đã được xử lý nên xóa thông báo để response không bật lỗi lên giao diện.

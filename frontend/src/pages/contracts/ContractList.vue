@@ -255,10 +255,16 @@ const canDelete = computed(() => perms.data?.can_delete === true)
 const isAdmin = computed(() => perms.data?.can_revert === true)
 
 const checked = ref<string[]>([])
-watch(tableRows, (r) => {
+// Các dòng còn hiện sau bộ lọc cột của DataTable (expose filteredRows; kiểu chuẩn chưa khai báo nên ép kiểu tại chỗ).
+// Cần bổ sung vào chuẩn: DataTable hỗ trợ chọn nhiều (cột checkbox, chọn cả trang) và khai báo filteredRows trong DataTableExpose.
+const visibleRows = computed<Contract[]>(() => {
+  const t = table.value as unknown as { filteredRows?: Contract[] } | null
+  return t?.filteredRows ?? tableRows.value
+})
+watch(visibleRows, (r) => {
   checked.value = pruneSelected(checked.value, r.map((x) => x.name))
 })
-const allNames = computed(() => selectAllNames(tableRows.value))
+const allNames = computed(() => selectAllNames(visibleRows.value))
 const allChecked = computed<boolean>({
   get: () => !!allNames.value?.length && allNames.value.every((n) => checked.value.includes(n)),
   set: (v) => {
@@ -338,6 +344,7 @@ async function runRevert(no: string) {
     await doc.revert_to_draft.submit()
     toast.success(`Đã chuyển hợp đồng ${no} về Nháp.`)
     await list.reload()
+    await allForTree.reload()
     await detail.reload()
     await schedules.reload()
   } catch (err) {

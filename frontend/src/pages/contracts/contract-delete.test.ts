@@ -84,3 +84,11 @@ describe('panel chi tiết', () => {
     for (const s of ['Nháp', 'Hết hạn', 'Đã thanh lý', 'Đã hủy']) expect(canRevert(s, true)).toBe(false)
   })
 })
+
+describe('chọn tất cả khi có lọc cột', () => {
+  it('chỉ chọn các dòng còn hiện sau lọc và bỏ chọn dòng bị lọc ẩn', () => {
+    const visible = [{ name: 'HD-1' }, { name: 'HD-2' }, { name: 'HD-3' }]
+    expect(selectAllNames(visible)).toEqual(['HD-1', 'HD-2', 'HD-3'])
+    expect(pruneSelected(['HD-1', 'HD-9', 'HD-8'], visible.map((r) => r.name))).toEqual(['HD-1'])
+  })
+})
