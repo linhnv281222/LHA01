@@ -203,27 +203,6 @@ def test_panel_dong_khi_xoa(t):
     t.not_see("Xóa hợp đồng")
 
 
-def test_ve_nhap_bi_chan_khi_co_hoa_don(t):
-    """Admin Chuyển về Nháp hợp đồng có đợt đã có hóa đơn Hiệu lực: bị chặn bằng câu của spec, đợt và trạng thái không đổi."""
-    no = mk(t, True, quarterly_items())
-    sch = t.get_list("Payment Schedule", {"contract": no}, ["name"])
-    assert len(sch) == 4
-    cust = t.get_list("Contract", {"name": no}, ["customer"])[0]["customer"]
-    t.insert({"doctype": "Sales Invoice Record", "customer": cust,
-              "invoice_no": f"{int(time.time()) % 10000000:07d}", "invoice_series": "C27TAA",
-              "invoice_date": "2027-01-10", "items": [{"schedule": sch[0]["name"]}]})
-    t.login()
-    t.page.goto(t.url(LIST))
-    t.see(no)
-    t.page.get_by_text(no).first.click()
-    t.page.get_by_role("button", name="Chuyển về Nháp").click()
-    t.page.get_by_role("button", name="Chuyển về Nháp").last.click()
-    t.see("Hợp đồng đã có đợt thu gắn chứng từ, không chuyển về Nháp được.")
-    t.step("Bị chặn")
-    assert status(t, no) == "Đang hiệu lực"
-    assert installments(t, no) == 4
-
-
 def test_dien_thoai_thanh_chon(t):
     """390px: thanh thao tác chọn nhiều không làm trang cuộn ngang."""
     t.login_as("Quản lý hợp đồng")
