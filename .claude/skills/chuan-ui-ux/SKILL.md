@@ -35,7 +35,7 @@ frontend/src/
 |---|---|---|
 | `SplitLayout` | khung màn danh sách | slot `#group` (cây), `#filters` (ô lọc), mặc định (vùng phải); emit `search` (nút Tìm kiếm/Enter). Người dùng kéo mép panel trái để giãn 220-480px, hoặc thu gọn cả panel (nút ở tiêu đề panel) |
 | `GroupTree` | "Truy vấn nhóm" | `:nodes` (TreeNode[] có `count`, `title` = chữ đầy đủ khi rê chuột), `v-model` = key nút lá đang chọn, `:default-expanded` = các nút mở sẵn (ví dụ năm hiện tại: `['y:2026']`; không truyền thì mở hết). Có sẵn nút Mở rộng/Thu gọn tất cả. Nhiều cấp được (ví dụ Năm → Tháng → Khách hàng → Chứng từ); mỗi cấp một icon và `tone` riêng để nhìn là biết cấp (Năm: `lucide-calendar-range` blue + `strong`, Tháng: `lucide-calendar-days` violet, Đối tác: `lucide-building-2` amber, Chứng từ: `lucide-file-text`, tone theo trạng thái: đang chạy/hiệu lực `green`, đã kết thúc/đóng/hủy `dark`, nháp `gray`; `title` của nút chứng từ ghi kèm trạng thái); nhãn trên cây viết ngắn (bỏ "Công ty TNHH/CP", nút lá chỉ ghi số chứng từ), chữ đầy đủ để ở `title` |
-| `PageTitle` | tiêu đề trang | `title`, `count`; slot `#actions`: nút Xuất Excel (outline) rồi nút chính |
+| `PageTitle` | tiêu đề trang | `title`, `count`; slot `#actions`: `ActionButton kind="export"` (Xuất Excel), các nút bước tiếp, rồi nút chính |
 | `StatCards` | dải số liệu (các ô chung một khung) | `:cards` (StatCard[]), `compact` (chữ nhỏ, dùng trong `DetailPanel #aside`), `v-model:active` = ô trạng thái đang lọc. StatCard: `tone` (green = tốt như đã thu, amber = cần chú ý như còn phải thu, red = quá hạn), `hint` (dòng phụ), `progress` (0-100, thanh tiến độ) |
 | `DataTable` | bảng danh sách, thao tác như Excel | `:columns` (Column[]), `:rows`, `v-model:selected`, `:loading`, `:external-filter-active`; slot `#cell-<key>`; ref `exportExcel(tenFile)`. Người dùng tự kéo giãn cột, khóa cột trái/phải (menu ⋮ ở tiêu đề), chọn chiều cao dòng, kẻ ô dọc; chọn vùng ô và Ctrl+C dán sang Excel, phím tắt như Excel (mũi tên, Shift, Ctrl+A, PageUp/Down, Enter mở chi tiết); thiết lập tự lưu theo từng bảng. Trang KHÔNG tự làm các việc này, không chặn phím trong bảng |
 | `DetailPanel` | chi tiết dòng chọn, dưới bảng | `title`, `:fields` (DetailField[]; trống tự hiện "Không có"); slot `#badge` (StatusBadge cạnh tiêu đề), `#actions` (nút "Cập nhật", quick action), `#aside` (khối bên phải, ví dụ `StatCards` tóm tắt tiền), mặc định (bảng phụ) |
@@ -45,6 +45,7 @@ frontend/src/
 | `LineItems` | bảng nhập nhiều dòng trong form (hạng mục, dòng chi tiết) | `:columns` (LineColumn[]: `key`, `label`, `width` kiểu lưới CSS, `align`, `required`, `readonly` = cột tự tính), `:rows`, `add-label`, `:totals`; emit `add`, `remove(index)`; slot `#cell-<key>` (đặt `FnField hide-label`), `#extra` (ô phụ của dòng, hiện ngay dưới dòng) |
 | `FnField` | MỌI ô nhập | `field`, `label`, `type` (text, number, currency, date, select, textarea, checkbox), `required`, `:error`, `hint`, `unit`, `:options`, `hide-label` (chỉ trong `LineItems`: tiêu đề cột là nhãn); emit `blur` |
 | `PrimaryButton` | nút chính (màu chủ đạo) | như `Button` của frappe-ui; mỗi màn hình MỘT nút chính |
+| `ActionButton` | mọi nút thao tác khác | `kind` quyết định màu và icon mặc định: `next` tím (bước tiếp trong luồng chứng từ: Tạo đề nghị thanh toán, Lập biên bản, Ghi nhận hóa đơn, Ghi nhận thu tiền), `edit` hổ phách (Sửa, Cập nhật), `export` xanh lá (Xuất Excel, tải file), `print` xanh dương nhạt (In), `approve` xanh lá đậm (Duyệt, Kích hoạt, Ghi), `danger` đỏ (Hủy, Xóa), `create` xanh đậm (thêm mới phụ), `neutral` trắng (còn lại). `label` bắt buộc; `icon-only` cho cột Thao tác trong bảng (label thành tooltip); `size="sm"` trong DetailPanel và trong bảng; `route` để chuyển trang (tự không chọn dòng); `:loading`, `:disabled`. KHÔNG dùng `Button` của frappe-ui cho thao tác nghiệp vụ |
 | `StatusBadge` | trạng thái | `:status` (StatusDef: label + icon + tone) |
 
 Hàm: `formatDate`, `formatDateTime`, `formatNumber`, `formatCurrency`, `maskSensitive`,
@@ -86,7 +87,12 @@ Hàm: `formatDate`, `formatDateTime`, `formatNumber`, `formatCurrency`, `maskSen
 5. Thẻ số liệu tính trên dữ liệu đã lọc; thẻ trạng thái bấm được để lọc (`v-model:active`).
 6. Chọn dòng đồng bộ với `?selected=` để quay lại từ form thì dòng vừa lưu được chọn sẵn.
 7. Chi tiết dòng hiện ngay dưới bảng, có nút "Cập nhật" (quick action sang form) và lịch sử liên quan (`MiniTable`).
-8. Nút trên dòng (Sửa...) dùng slot `#cell-_actions`, thêm `@click.stop` để không chọn dòng.
+8. Nút trên dòng (Sửa...) dùng slot `#cell-_actions` với `ActionButton icon-only size="sm"` (Sửa: `kind="edit"`); nút gọi hàm
+   (không có `route`) thì thêm `@click.stop` để không chọn dòng.
+9. Màu tự động, KHÔNG tự tô thêm (theo màn mẫu "Báo cáo chuyến"): tiêu đề bảng nền vàng (hàng nhóm vàng đậm, hàng lọc
+   vàng nhạt, cột ghim đậm hơn), cột ghim ở thân bảng nền xanh nhạt có vạch ranh giới, dòng Tổng nền xanh nhạt; thẻ số liệu tô
+   theo `tone` (tổng: để trống = xanh dương, đã thu `green`, còn phải thu `amber`, quá hạn `red`) hoặc theo trạng thái của thẻ;
+   panel trái chia hai nửa cuộn riêng "Truy vấn nhóm" / "Truy vấn chi tiết" do SplitLayout vẽ.
 
 Truy vấn nhóm của màn chứng từ (hợp đồng, đề nghị thanh toán, hóa đơn, phiếu thu...): cây Năm → Tháng → Đối tác → Chứng từ,
 năm mới nhất trên, mặc định mở năm hiện tại; trạng thái lọc bằng thẻ số liệu và ô ở truy vấn chi tiết, không đưa vào cây.

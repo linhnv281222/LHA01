@@ -410,6 +410,9 @@ function pinStyle(col: Column<T>, extra: Record<string, string> = {}) {
   return style
 }
 
+// Tiêu đề bảng nền VÀNG (theo màn mẫu "Báo cáo chuyến"): hàng nhóm vàng đậm, hàng tên cột vàng, hàng lọc vàng nhạt;
+// cột ghim đậm hơn một bậc. Thân bảng: cột ghim nền xanh nhạt, có vạch ranh giới. Màu đặt ở CSS (.fn-th*, .fn-pinned).
+
 function groupStyle(seg: HeaderSegment) {
   const cols = seg.keys.map((k) => colByKey.value[k])
   const width = cols.reduce((s, c) => s + c.width, 0)
@@ -456,8 +459,8 @@ const DENSITIES: { value: Density; label: string }[] = [
 </script>
 
 <template>
-  <div class="fn-table overflow-hidden rounded-6 border border-outline-gray-2 bg-surface-base" :class="resizing ? 'select-none' : ''">
-    <div class="flex items-center justify-between gap-2 border-b border-outline-gray-1 px-3 py-1.5">
+  <div class="fn-table overflow-hidden rounded-6 bg-surface-base" :class="resizing ? 'select-none' : ''">
+    <div class="fn-table-cap flex items-center justify-between gap-2 px-3 py-1.5">
       <span class="text-sm text-ink-gray-6">{{ caption }}</span>
       <Popover>
         <template #trigger>
@@ -566,7 +569,7 @@ const DENSITIES: { value: Density; label: string }[] = [
                 <button
                   v-if="canSort(col)"
                   type="button"
-                  class="inline-flex min-w-0 flex-1 items-center gap-1 text-sm-semibold text-ink-gray-7 hover:text-ink-gray-9"
+                  class="fn-th-label inline-flex min-w-0 flex-1 items-center gap-1 text-sm-semibold"
                   :class="alignClass(col) === 'text-right tabular-nums' ? 'justify-end' : ''"
                   :title="col.label"
                   @click="toggleSort(col)"
@@ -579,12 +582,12 @@ const DENSITIES: { value: Density; label: string }[] = [
                         ? sort.dir === 'asc'
                           ? 'lucide-arrow-up text-fn-brand'
                           : 'lucide-arrow-down text-fn-brand'
-                        : 'lucide-arrow-up-down text-ink-gray-4'
+                        : 'lucide-arrow-up-down opacity-40'
                     "
                     aria-hidden="true"
                   />
                 </button>
-                <span v-else class="min-w-0 flex-1 truncate text-sm-semibold text-ink-gray-7" :class="alignClass(col)">{{ col.label }}</span>
+                <span v-else class="fn-th-label min-w-0 flex-1 truncate text-sm-semibold" :class="alignClass(col)">{{ col.label }}</span>
                 <Dropdown v-if="col.type !== 'index'" :options="columnMenu(col)">
                   <button
                     type="button"
@@ -740,21 +743,34 @@ const DENSITIES: { value: Density; label: string }[] = [
 </template>
 
 <style scoped>
+/* Khung bảng chính: viền đậm và đổ bóng như khối chi tiết, để các vùng trên trang tách bạch. */
+.fn-table {
+  border: 1px solid #c9d3e0;
+  box-shadow: 0 1px 3px rgb(16 24 40 / 0.08);
+}
+.fn-table-cap {
+  background: #f7f9fc;
+  border-bottom: 1px solid #d5dbe5;
+}
 .fn-th-group {
   position: sticky;
   z-index: 3;
   height: 30px;
   padding: 0 12px;
-  background: theme('colors.fn.table-head');
-  border-bottom: 1px solid theme('colors.fn.table-head-border');
-  border-right: 1px solid theme('colors.fn.table-head-border');
+  background: #f5cf4d;
+  border-bottom: 1px solid #e0b532;
+  border-right: 2px solid #fff6d6;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-gray-8);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #4a3700;
   text-align: center;
   white-space: nowrap;
 }
 .fn-th-group-empty {
+  background: #ffe680;
+  border-right: 0;
   border-bottom-color: transparent;
 }
 .fn-th {
@@ -762,17 +778,32 @@ const DENSITIES: { value: Density; label: string }[] = [
   z-index: 2;
   height: 36px;
   padding: 0 10px 0 12px;
-  background: theme('colors.fn.table-head');
-  border-bottom: 1px solid theme('colors.fn.table-head-border');
+  background: #ffe680;
+  border-bottom: 1px solid #d9b13a;
+  color: #3b2f00;
   white-space: nowrap;
+}
+.fn-th-label {
+  color: #3b2f00;
+}
+.fn-th-label:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .fn-th-filter {
   position: sticky;
   z-index: 2;
   height: 38px;
   padding: 3px 6px;
-  background: theme('colors.fn.table-head');
-  border-bottom: 1px solid theme('colors.fn.table-head-border');
+  background: #fff3c2;
+  border-bottom: 1px solid #d9b13a;
+}
+.fn-th.fn-pinned,
+.fn-th-group-empty.fn-pinned {
+  background: #f5cf4d;
+}
+.fn-th-filter.fn-pinned {
+  background: #fbe58a;
 }
 .fn-th.fn-pinned,
 .fn-th-filter.fn-pinned,
@@ -811,7 +842,7 @@ const DENSITIES: { value: Density; label: string }[] = [
   top: 50%;
   right: 8px;
   transform: translateY(-50%);
-  background: theme('colors.fn.table-head');
+  background: #fff3c2;
   opacity: 0;
 }
 .fn-th:hover .fn-col-menu,
@@ -866,14 +897,21 @@ const DENSITIES: { value: Density; label: string }[] = [
 .fn-td.fn-pinned {
   position: sticky;
   z-index: 1;
-  background: theme('colors.fn.pinned');
+  background: #edf2fb;
+}
+.fn-row-even .fn-td.fn-pinned {
+  background: #e3ebf8;
+}
+.fn-row:hover .fn-td.fn-pinned {
+  background: #d3e2f8;
 }
 .fn-row:hover .fn-td {
-  background: var(--surface-gray-1);
+  background: #e6effb;
 }
 .fn-row-selected .fn-td,
-.fn-row-selected:hover .fn-td {
-  background: theme('colors.fn.selected');
+.fn-row-selected:hover .fn-td,
+.fn-row-selected .fn-td.fn-pinned {
+  background: #c7dbf6;
 }
 .fn-row-selected .fn-td:first-child {
   box-shadow: inset 3px 0 0 theme('colors.fn.brand');
@@ -898,24 +936,25 @@ const DENSITIES: { value: Density; label: string }[] = [
   outline: 2px solid theme('colors.fn.brand');
   outline-offset: -2px;
 }
+/* Ranh giới vùng cột ghim: vạch xanh 3px, thấy rõ khi cuộn ngang. */
 .fn-pin-edge-left {
-  box-shadow: 4px 0 6px -4px rgb(0 0 0 / 0.14);
+  box-shadow: 3px 0 0 #7fa6d6;
 }
 .fn-pin-edge-right {
-  box-shadow: -4px 0 6px -4px rgb(0 0 0 / 0.14);
+  box-shadow: -3px 0 0 #7fa6d6;
 }
 .fn-row-selected .fn-td.fn-pin-edge-left:first-child {
-  box-shadow: inset 3px 0 0 theme('colors.fn.brand'), 4px 0 6px -4px rgb(0 0 0 / 0.14);
+  box-shadow: inset 3px 0 0 theme('colors.fn.brand'), 3px 0 0 #7fa6d6;
 }
 .fn-td-total {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  height: 40px;
+  height: 42px;
   padding: 0 12px;
-  background: theme('colors.fn.zebra');
-  border-top: 1px solid var(--outline-gray-2);
-  font-weight: 600;
+  background: #e3ebf8;
+  border-top: 2px solid #aeb7c6;
+  font-weight: 700;
   color: var(--ink-gray-9);
   white-space: nowrap;
 }

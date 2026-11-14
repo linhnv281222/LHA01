@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Bảng phụ nhỏ (lịch sử, dòng con trong chi tiết): tiêu đề xám nhạt, chỉ kẻ ngang, không phân trang.
+// Bảng phụ nhỏ (lịch sử, dòng con trong chi tiết): tiêu đề xanh xám (khác bảng chính nền vàng để nhìn là biết bảng phụ),
+// có khung, dòng xen kẽ, không phân trang. Đặt sau một <h3> trong DetailPanel thì h3 thành thanh tiêu đề của khung.
 // Dòng Tổng: truyền totals (giá trị theo key cột; cột đầu có giá trị là nhãn, ví dụ "Tổng").
 // Danh sách chính luôn dùng DataTable.
 import type { Column } from './table'
@@ -19,7 +20,7 @@ const isNum = (c: Column<any>) => c.type === 'number' || c.type === 'currency' |
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-6 border border-outline-gray-2">
+  <div class="fn-mini overflow-hidden">
   <table class="w-full border-separate border-spacing-0 text-base">
     <thead>
       <tr>
@@ -27,7 +28,7 @@ const isNum = (c: Column<any>) => c.type === 'number' || c.type === 'currency' |
           v-for="col in columns"
           :key="col.key"
           scope="col"
-          class="border-b border-fn-table-head-border bg-fn-table-head px-3 py-2 text-sm-semibold text-ink-gray-7"
+          class="fn-mini-th px-3 py-2 text-sm-semibold"
           :class="isNum(col) ? 'text-right' : 'text-left'"
           :style="{ width: `${col.width}px` }"
         >
@@ -55,7 +56,7 @@ const isNum = (c: Column<any>) => c.type === 'number' || c.type === 'currency' |
         <td
           v-for="col in columns"
           :key="col.key"
-          class="bg-fn-zebra px-3 py-2 font-semibold text-ink-gray-9"
+          class="fn-mini-total px-3 py-2 font-semibold text-ink-gray-9"
           :class="isNum(col) ? 'text-right tabular-nums' : ''"
         >
           {{ totals[col.key] ?? '' }}
@@ -65,3 +66,23 @@ const isNum = (c: Column<any>) => c.type === 'number' || c.type === 'currency' |
   </table>
   </div>
 </template>
+
+<style scoped>
+.fn-mini {
+  border: 1px solid #c9d3e0;
+  border-radius: 8px;
+  background: var(--surface-base);
+}
+.fn-mini-th {
+  background: #dce5f2;
+  color: #1e3a5f;
+  border-bottom: 1px solid #b9c7dc;
+}
+.fn-mini-th + .fn-mini-th {
+  border-left: 1px solid #c9d5e6;
+}
+.fn-mini-total {
+  background: #e3ebf8;
+  border-top: 2px solid #aeb7c6;
+}
+</style>
