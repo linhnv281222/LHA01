@@ -36,7 +36,36 @@ def activate(t, name):
     run_method(t, name, "activate")
 
 
+def hd_a_items():
+    """HD-A (ticket #43): 3 đợt đến hạn 15/01, 15/02, 15/03/2027, cần nghiệm thu."""
+    return [{"item_name": f"Đợt {i}", "vat_rate": "8%", "billing_type": "Một lần", "amount": 11_000_000 * i,
+             "due_date": d, "requires_acceptance": 1}
+            for i, d in enumerate(["2027-01-15", "2027-02-15", "2027-03-15"], 1)]
+
+
+def seed_43(t):
+    r = t.ensure(contract_doc(t, "DEMO-HD-A", items=hd_a_items()), key=["contract_no"])
+    if t.get_list("Contract", {"name": r["name"]}, ["status"])[0]["status"] == "Nháp":
+        activate(t, r["name"])
+    # Đợt không cần nghiệm thu, đã quá hạn
+    items = [{"item_name": "Bảo trì", "vat_rate": "8%", "billing_type": "Một lần", "amount": 33_000_000,
+              "due_date": "2026-01-10", "requires_acceptance": 0}]
+    d = contract_doc(t, "DEMO-HD-B", items=items)
+    d["start_date"] = "2026-01-01"
+    r = t.ensure(d, key=["contract_no"])
+    if t.get_list("Contract", {"name": r["name"]}, ["status"])[0]["status"] == "Nháp":
+        activate(t, r["name"])
+    # Hợp đồng Đã hủy để thử Xóa hợp đồng
+    r = t.ensure(contract_doc(t, "DEMO-DAHUY-1"), key=["contract_no"])
+    if t.get_list("Contract", {"name": r["name"]}, ["status"])[0]["status"] == "Nháp":
+        try:
+            run_method(t, r["name"], "cancel_contract")
+        except AssertionError:
+            pass
+
+
 def seed(t):
+    seed_43(t)
     for i in range(1, 6):
         t.ensure(contract_doc(t, f"DEMO-NHAP-{i}", i * 1_000_000), key=["contract_no"])
     # Đang hiệu lực, 4 đợt thu (Quý), chưa chứng từ: Admin thử Chuyển về Nháp
