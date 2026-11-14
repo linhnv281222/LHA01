@@ -397,7 +397,7 @@ async function runRevert(no: string) {
       <button type="button" class="text-base text-ink-blue-link hover:underline" @click="clearAll">Xóa lọc</button>
     </template>
 
-    <div class="min-w-0 max-w-full space-y-3">
+    <div class="min-w-0 max-w-full space-y-3 overflow-x-clip">
     <PageTitle title="Hợp đồng" :count="tableRows.length" :subtitle="`${tableRows.length} hợp đồng`">
       <template #actions>
         <Button size="md" variant="outline" icon-left="lucide-file-spreadsheet" label="Xuất Excel" @click="exportExcel" />
