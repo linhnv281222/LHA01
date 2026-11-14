@@ -15,6 +15,8 @@ MSG_END_REQUIRED = "Hợp đồng có hạng mục Định kỳ nên phải nh�
 MSG_END_BEFORE_START = "Ngày kết thúc phải từ ngày bắt đầu trở đi."
 MSG_NO_ITEMS = "Hợp đồng chưa có hạng mục, không kích hoạt được."
 MSG_DELETE_NOT_DRAFT = "Chỉ xóa được hợp đồng ở trạng thái Nháp. Hãy chuyển hợp đồng sang Đã hủy."
+MSG_REVERT_BILLED = "Hợp đồng đã có đợt thu gắn chứng từ, không chuyển về Nháp được."
+MSG_REVERT_ADMIN_ONLY = "Chỉ quản trị hệ thống (System Manager) được chuyển hợp đồng về Nháp."
 MSG_LOCKED = "Hợp đồng {0} đã {1}, không sửa được."
 MSG_STATUS_READONLY = "Trạng thái hợp đồng chỉ đổi bằng nút Kích hoạt, Thanh lý hoặc Hủy hợp đồng."
 MSG_BAD_STATE = "Không thể {0} hợp đồng ở trạng thái {1}."
@@ -307,6 +309,10 @@ class Contract(Document):
 			before = self.get_doc_before_save()
 			if before and before.status == STATUS_ACTIVE:
 				ps.delete_unbilled_schedules(self.name)
+		elif self.status == STATUS_DRAFT:
+			before = self.get_doc_before_save()
+			if before and before.status == STATUS_ACTIVE:
+				ps.delete_unbilled_schedules(self.name)
 
 		if self.has_value_changed("responsible_user"):
 			ps.sync_responsible_user(self.name, self.responsible_user)
@@ -357,6 +363,21 @@ class Contract(Document):
 		if has_billed_installments(self.name):
 			frappe.throw(_("Hợp đồng đã có đợt thu gắn chứng từ, không hủy được."))
 		self._set_status(STATUS_CANCELLED)
+
+	@frappe.whitelist()
+	def revert_to_draft(self):
+		"""Đang hiệu lực → Nháp (chỉ System Manager, chưa có chứng từ). Đợt chưa có chứng từ bị xóa trong on_update."""
+		self.check_permission("write")
+		if "System Manager" not in frappe.get_roles():
+			frappe.throw(_(MSG_REVERT_ADMIN_ONLY), frappe.PermissionError)
+		# Khóa dòng hợp đồng trước khi kiểm; trạng thái đã đổi thì nạp lại.
+		locked_status = frappe.db.get_value("Contract", self.name, "status", for_update=True)
+		if locked_status != self.status:
+			self.reload()
+		self._require_status("chuyển về Nháp", (STATUS_ACTIVE,))
+		if has_billed_installments(self.name):
+			frappe.throw(_(MSG_REVERT_BILLED))
+		self._set_status(STATUS_DRAFT)
 
 	@frappe.whitelist()
 	def liquidate(self):

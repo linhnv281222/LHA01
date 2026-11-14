@@ -10,6 +10,7 @@ from contract_tracker.contract_tracker.doctype.contract.contract import (
 	MSG_DELETE_NOT_DRAFT,
 	MSG_END_REQUIRED,
 	MSG_NO_ITEMS,
+	MSG_REVERT_BILLED,
 	format_number,
 	recurring_amount,
 	recurring_periods,
@@ -341,6 +342,115 @@ class IntegrationTestContract(IntegrationTestCase):
 		self.assertIn(MSG_DELETE_NOT_DRAFT, str(cm.exception))
 		self.assertIn("Đã hủy", str(cm.exception))
 		self.assertTrue(frappe.db.exists("Contract", doc.name))
+
+	# ---- chuyển về Nháp ----
+
+	def _active_recurring(self, **kw):
+		doc = make_contract(items=[item_recurring()], **kw).insert()
+		doc.activate()
+		return frappe.get_doc("Contract", doc.name)
+
+	def _schedule_rows(self, name):
+		return frappe.get_all(
+			"Payment Schedule",
+			filters={"contract": name},
+			fields=["item_key", "total_amount", "due_date"],
+			order_by="due_date asc",
+		)
+
+	def test_revert_to_draft_deletes_unbilled(self):
+		doc = self._active_recurring()
+		self.assertEqual(frappe.db.count("Payment Schedule", {"contract": doc.name}), 4)
+		doc.revert_to_draft()
+		self.assertEqual(frappe.db.get_value("Contract", doc.name, "status"), "Nháp")
+		self.assertEqual(frappe.db.count("Payment Schedule", {"contract": doc.name}), 0)
+		frappe.delete_doc("Contract", doc.name)
+		self.assertFalse(frappe.db.exists("Contract", doc.name))
+
+	def test_revert_to_draft_is_tracked(self):
+		# Chuyển về Nháp đi qua save() nên track_changes của Contract ghi người và thời điểm.
+		self.assertTrue(frappe.get_meta("Contract").track_changes)
+		doc = self._active_recurring()
+		doc.revert_to_draft()
+		self.assertEqual(frappe.db.get_value("Contract", doc.name, "modified_by"), frappe.session.user)
+
+	def test_revert_blocked_by_invoice(self):
+		from contract_tracker.contract_tracker.doctype.sales_invoice_record.test_sales_invoice_record import (
+			make_billing_contract,
+			make_invoice,
+			schedule_of,
+		)
+
+		doc = make_billing_contract()
+		before = self._schedule_rows(doc.name)
+		make_invoice(doc.customer, [schedule_of(doc.name, "Tạm ứng")]).insert()
+		with self.assertRaises(frappe.ValidationError) as cm:
+			doc.revert_to_draft()
+		self.assertIn(MSG_REVERT_BILLED, str(cm.exception))
+		self.assertEqual(frappe.db.get_value("Contract", doc.name, "status"), "Đang hiệu lực")
+		self.assertEqual(self._schedule_rows(doc.name), before)
+
+	def test_revert_blocked_by_receipt(self):
+		from contract_tracker.contract_tracker.doctype.payment_receipt.test_payment_receipt import make_receipt
+		from contract_tracker.contract_tracker.doctype.sales_invoice_record.test_sales_invoice_record import (
+			make_billing_contract,
+			schedule_of,
+		)
+
+		doc = make_billing_contract()
+		before = self._schedule_rows(doc.name)
+		advance = schedule_of(doc.name, "Tạm ứng")
+		make_receipt(doc.customer, 1_000_000, [(advance, 1_000_000)]).insert()
+		with self.assertRaises(frappe.ValidationError) as cm:
+			doc.revert_to_draft()
+		self.assertIn(MSG_REVERT_BILLED, str(cm.exception))
+		self.assertEqual(frappe.db.get_value("Contract", doc.name, "status"), "Đang hiệu lực")
+		self.assertEqual(self._schedule_rows(doc.name), before)
+
+	def test_revert_requires_system_manager(self):
+		doc = self._active_recurring()
+		manager = make_user("quan.ly.ve.nhap@example.com", MANAGER)
+		frappe.set_user(manager)
+		with self.assertRaises(frappe.PermissionError):
+			frappe.get_doc("Contract", doc.name).revert_to_draft()
+		frappe.set_user("Administrator")
+		self.assertEqual(frappe.db.get_value("Contract", doc.name, "status"), "Đang hiệu lực")
+		self.assertEqual(frappe.db.count("Payment Schedule", {"contract": doc.name}), 4)
+
+	def test_revert_only_from_active(self):
+		draft = make_contract().insert()
+		expired = make_contract().insert()
+		cancelled = make_contract().insert()
+		liquidated = make_contract().insert()
+		for d in (expired, liquidated):
+			d.activate()
+		liquidated.liquidate()
+		cancelled.cancel_contract()
+		frappe.db.set_value("Contract", expired.name, "status", "Hết hạn")
+		for d in (draft, expired, liquidated, cancelled):
+			with self.assertRaises(frappe.ValidationError, msg=d.name):
+				frappe.get_doc("Contract", d.name).revert_to_draft()
+
+	def test_revert_full_cycle(self):
+		doc = self._active_recurring()
+		first = self._schedule_rows(doc.name)
+		total = frappe.db.get_value("Contract", doc.name, "total_after_tax")
+		for _round in range(2):
+			frappe.get_doc("Contract", doc.name).revert_to_draft()
+			self.assertEqual(frappe.db.count("Payment Schedule", {"contract": doc.name}), 0)
+			if _round == 0:
+				frappe.get_doc("Contract", doc.name).activate()
+				again = self._schedule_rows(doc.name)
+				self.assertEqual(len(again), len(first))
+				for a, b in zip(again, first, strict=True):
+					self.assertEqual(a.item_key, b.item_key)
+					self.assertEqual(a.due_date, b.due_date)
+					self.assertAlmostEqual(a.total_amount, b.total_amount, delta=0.01)
+				self.assertAlmostEqual(
+					frappe.db.get_value("Contract", doc.name, "total_after_tax"), total, delta=0.01
+				)
+		frappe.delete_doc("Contract", doc.name)
+		self.assertFalse(frappe.db.exists("Contract", doc.name))
 
 	# ---- phân quyền ----
 

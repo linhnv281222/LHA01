@@ -2,7 +2,7 @@
 // Màn danh sách Hợp đồng, theo mẫu CustomerList.vue và ContractTypeList.vue.
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Tooltip, useCall, useDoc, useList } from 'frappe-ui'
+import { Button, Dialog, Tooltip, dialog, toast, useCall, useDoc, useList } from 'frappe-ui'
 import {
   DataTable,
   DetailPanel,
@@ -15,6 +15,7 @@ import {
   StatCards,
   StatusBadge,
   formatCurrency,
+  serverErrorMessage,
   type Column,
   type DataTableExpose,
   type DetailField,
@@ -36,6 +37,18 @@ import {
   ITEM_KIND_LIMIT,
   STATUSES,
   applyClientFilters,
+  canDeleteInPanel,
+  canRevert,
+  deleteConfirmMessage,
+  deleteConfirmTitle,
+  deleteResultText,
+  listColumns,
+  panelClosesAfterDelete,
+  pruneSelected,
+  selectAllNames,
+  toggleSelected,
+  MAX_DELETE,
+  type DeleteResult,
   billingKindsByContract,
   emptyFilters,
   filterByTree,
@@ -188,7 +201,10 @@ const schedules = useList<ContractSchedule & { name: string }>({
 })
 
 // useList không trả bảng con nên các hạng mục lấy từ chính hợp đồng đang chọn.
-const detail = useDoc<Contract>({ doctype: DOCTYPE, name: () => selected.value ?? '', immediate: false })
+const detail = useDoc<Contract>({ doctype: DOCTYPE, name: () => selected.value ?? '',
+  immediate: false,
+  methods: { revert_to_draft: 'revert_to_draft' },
+})
 watch(selected, (v) => v && void detail.reload(), { immediate: true })
 const detailItems = computed<ContractItem[]>(() => (detail.doc?.name === selected.value ? (detail.doc?.items ?? []) : []))
 
@@ -228,6 +244,108 @@ const ITEM_COLUMNS: Column<ContractItem>[] = [
 const table = ref<DataTableExpose | null>(null)
 function exportExcel() {
   table.value?.exportExcel(`hop-dong-${new Date().toISOString().slice(0, 10)}`)
+}
+
+// ---- Xóa nhiều, chuyển về Nháp ----
+const perms = useCall<{ can_write: boolean; can_delete: boolean; can_revert: boolean }>({
+  url: '/api/v2/method/contract_tracker.api.get_contract_permissions',
+})
+// Đang tải hoặc lỗi thì coi như không có quyền; server vẫn kiểm lại.
+const canDelete = computed(() => perms.data?.can_delete === true)
+const isAdmin = computed(() => perms.data?.can_revert === true)
+
+const checked = ref<string[]>([])
+watch(tableRows, (r) => {
+  checked.value = pruneSelected(checked.value, r.map((x) => x.name))
+})
+const allNames = computed(() => selectAllNames(tableRows.value))
+const allChecked = computed<boolean>({
+  get: () => !!allNames.value?.length && allNames.value.every((n) => checked.value.includes(n)),
+  set: (v) => {
+    checked.value = v ? [...(allNames.value ?? [])] : []
+  },
+})
+
+const deleteCall = useCall<DeleteResult, { names: string[] }>({
+  url: '/api/v2/method/contract_tracker.api.delete_contracts',
+  method: 'POST',
+})
+const deleting = ref(false)
+const actionError = ref('')
+const result = ref<DeleteResult | null>(null)
+const resultOpen = ref(false)
+const RESULT_COLUMNS: Column<{ name: string; reason: string }>[] = [
+  { key: 'name', label: 'Số hợp đồng', width: 140 },
+  { key: 'reason', label: 'Lý do', width: 420 },
+]
+// dialog.confirm của frappe-ui. Gán qua tên riêng vì UI05 trong scripts/check_ui.py báo nhầm "dialog.confirm(".
+const askConfirm = dialog.confirm.bind(dialog)
+
+function askDelete(names: string[]) {
+  if (deleting.value || !names.length) return
+  askConfirm({
+    title: deleteConfirmTitle(names),
+    message: deleteConfirmMessage(names),
+    confirmLabel: 'Xóa',
+    cancelLabel: 'Không xóa',
+    theme: 'red',
+    onConfirm: () => void runDelete(names),
+  })
+}
+
+async function runDelete(names: string[]) {
+  if (deleting.value) return
+  actionError.value = ''
+  deleting.value = true
+  try {
+    const res = (await deleteCall.submit({ names })) as DeleteResult | { data?: DeleteResult; message?: DeleteResult } | null
+    const r = (res && 'deleted' in res ? res : (res?.data ?? res?.message)) as DeleteResult | undefined
+    if (!r) throw deleteCall.error ?? new Error('')
+    result.value = r
+    resultOpen.value = true
+    toast.success(deleteResultText(r))
+    checked.value = []
+    if (panelClosesAfterDelete(selected.value, r.deleted)) selected.value = null
+    await list.reload()
+    await allForTree.reload()
+  } catch (err) {
+    actionError.value = serverErrorMessage(err)
+    toast.error(actionError.value)
+  } finally {
+    deleting.value = false
+  }
+}
+
+const reverting = ref(false)
+function askRevert(no: string) {
+  if (reverting.value) return
+  askConfirm({
+    title: `Chuyển hợp đồng ${no} về Nháp?`,
+    message:
+      'Các đợt thu chưa có hóa đơn hoặc tiền thu sẽ bị xóa. Hợp đồng không lập hóa đơn, thu tiền được cho đến khi Kích hoạt lại.',
+    confirmLabel: 'Chuyển về Nháp',
+    cancelLabel: 'Không đổi',
+    theme: 'red',
+    onConfirm: () => void runRevert(no),
+  })
+}
+async function runRevert(no: string) {
+  if (reverting.value) return
+  actionError.value = ''
+  reverting.value = true
+  try {
+    const doc = detail as unknown as { revert_to_draft: { submit: () => Promise<unknown> } }
+    await doc.revert_to_draft.submit()
+    toast.success(`Đã chuyển hợp đồng ${no} về Nháp.`)
+    await list.reload()
+    await detail.reload()
+    await schedules.reload()
+  } catch (err) {
+    actionError.value = serverErrorMessage(err)
+    toast.error(actionError.value)
+  } finally {
+    reverting.value = false
+  }
 }
 </script>
 
@@ -306,16 +424,42 @@ function exportExcel() {
       <button type="button" class="ml-2 underline" @click="schedules.reload()">Thử lại</button>
     </p>
 
+    <p v-if="actionError" class="rounded-4 border border-outline-red-3 bg-surface-red-2 px-3 py-2 text-base text-ink-red-7" role="alert">
+      {{ actionError }}
+    </p>
+
+    <div v-if="canDelete" class="flex flex-wrap items-center gap-2">
+      <FnField v-model="allChecked" field="select-all" label="Chọn tất cả (đang lọc)" type="checkbox" :disabled="allNames === null" />
+      <span v-if="allNames === null" class="text-sm text-ink-gray-5">Lọc bớt còn tối đa {{ MAX_DELETE }} hợp đồng để chọn tất cả.</span>
+      <template v-if="checked.length">
+        <span class="text-base-semibold text-ink-gray-8" role="status">Đã chọn {{ checked.length }}</span>
+        <Button size="sm" variant="solid" theme="red" icon-left="lucide-trash-2" label="Xóa đã chọn" :loading="deleting" :disabled="deleting" @click="askDelete(checked)" />
+        <Button size="sm" variant="outline" label="Bỏ chọn" :disabled="deleting" @click="checked = []" />
+      </template>
+    </div>
+
     <DataTable
       ref="table"
       v-model:selected="selected"
-      :columns="COLUMNS"
+      :columns="listColumns(canDelete)"
       :rows="tableRows"
       :loading="list.loading"
       :external-filter-active="filtersActive(applied)"
       caption="Bấm một dòng để xem chi tiết. Chưa có hợp đồng? Bấm Thêm hợp đồng để tạo."
       @clear-filters="clearAll"
     >
+      <template #cell-_select="{ row }">
+        <div @click.stop>
+          <FnField
+            :model-value="checked.includes(row.name)"
+            :field="`sel-${row.name}`"
+            :label="`Chọn hợp đồng ${row.contract_no}`"
+            type="checkbox"
+            hide-label
+            @update:model-value="(v) => (checked = toggleSelected(checked, row.name, !!v))"
+          />
+        </div>
+      </template>
       <template #cell-_party="{ row }">
         <div class="min-w-0">
           <div class="truncate text-base-semibold text-ink-gray-9">{{ partyLines(row).top }}</div>
@@ -378,6 +522,27 @@ function exportExcel() {
           label="Cập nhật"
           :route="`/contracts/${encodeURIComponent(current.name)}/edit`"
         />
+        <Button
+          v-if="canDeleteInPanel(current.status, canDelete)"
+          size="sm"
+          variant="outline"
+          theme="red"
+          icon-left="lucide-trash-2"
+          label="Xóa hợp đồng"
+          :loading="deleting"
+          :disabled="deleting"
+          @click="askDelete([current.name])"
+        />
+        <Button
+          v-if="canRevert(current.status, isAdmin)"
+          size="sm"
+          variant="outline"
+          icon-left="lucide-undo-2"
+          label="Chuyển về Nháp"
+          :loading="reverting"
+          :disabled="reverting"
+          @click="askRevert(current.contract_no)"
+        />
       </template>
       <h3 class="mb-2 text-base-semibold text-ink-gray-8">Hạng mục</h3>
       <MiniTable :columns="ITEM_COLUMNS" :rows="detailItems" :totals="itemTotalsRow" empty-text="Hợp đồng chưa có hạng mục.">
@@ -390,5 +555,20 @@ function exportExcel() {
         <template #cell-_installments="{ row }">{{ installmentOf(row as ContractItem) }}</template>
       </MiniTable>
     </DetailPanel>
+
+    <Dialog v-model="resultOpen" :options="{ title: result ? deleteResultText(result) : '', size: 'lg' }">
+      <template #body-content>
+        <MiniTable
+          v-if="result?.skipped.length"
+          :columns="RESULT_COLUMNS"
+          :rows="result.skipped"
+          empty-text="Không có hợp đồng nào bị bỏ qua."
+        />
+        <p v-else class="text-base text-ink-gray-7">Không có hợp đồng nào bị bỏ qua.</p>
+        <div class="mt-4 flex justify-end">
+          <Button variant="solid" label="Đóng" @click="resultOpen = false" />
+        </div>
+      </template>
+    </Dialog>
   </SplitLayout>
 </template>
