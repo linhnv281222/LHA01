@@ -397,6 +397,7 @@ async function runRevert(no: string) {
       <button type="button" class="text-base text-ink-blue-link hover:underline" @click="clearAll">Xóa lọc</button>
     </template>
 
+    <div class="min-w-0 max-w-full space-y-3 overflow-x-clip">
     <PageTitle title="Hợp đồng" :count="tableRows.length" :subtitle="`${tableRows.length} hợp đồng`">
       <template #actions>
         <Button size="md" variant="outline" icon-left="lucide-file-spreadsheet" label="Xuất Excel" @click="exportExcel" />
@@ -562,20 +563,21 @@ async function runRevert(no: string) {
         <template #cell-_installments="{ row }">{{ installmentOf(row as ContractItem) }}</template>
       </MiniTable>
     </DetailPanel>
+    </div>
 
-    <Dialog v-model="resultOpen" :options="{ title: result ? deleteResultText(result) : '', size: 'lg' }">
-      <template #body-content>
-        <MiniTable
-          v-if="result?.skipped.length"
-          :columns="RESULT_COLUMNS"
-          :rows="result.skipped"
-          empty-text="Không có hợp đồng nào bị bỏ qua."
-        />
-        <p v-else class="text-base text-ink-gray-7">Không có hợp đồng nào bị bỏ qua.</p>
-        <div class="mt-4 flex justify-end">
-          <Button variant="solid" label="Đóng" @click="resultOpen = false" />
-        </div>
-      </template>
+    <Dialog
+      v-model:open="resultOpen"
+      :title="result ? deleteResultText(result) : 'Kết quả xóa'"
+      size="lg"
+      :actions="[{ label: 'Đóng', variant: 'solid', onClick: ({ close }: { close: () => void }) => close() }]"
+    >
+      <MiniTable
+        v-if="result?.skipped.length"
+        :columns="RESULT_COLUMNS"
+        :rows="result.skipped"
+        empty-text="Không có hợp đồng nào bị bỏ qua."
+      />
+      <p v-else class="text-base text-ink-gray-7">Không có hợp đồng nào bị bỏ qua.</p>
     </Dialog>
   </SplitLayout>
 </template>
