@@ -3,7 +3,7 @@
 // theo ý nghĩa: tone (đã thu: green, còn phải thu: amber, quá hạn: red); ô trạng thái lấy màu của trạng thái;
 // ô không khai báo màu dùng xanh dương (số tổng).
 // Ô có status bấm được để lọc theo trạng thái đó; bấm lại để bỏ lọc. Ô không có status chỉ để xem.
-// hint là dòng phụ, progress là thanh tiến độ (cùng màu thẻ).
+// hint là dòng phụ, progress là thanh tiến độ (cùng màu thẻ). Thẻ tự xuống hàng khi khối hẹp (không cắt mất số).
 import { TONE_CLASSES } from './status'
 import type { StatCard } from './types'
 
@@ -38,7 +38,7 @@ function onClick(card: StatCard) {
   <div
     class="grid"
     :class="compact ? 'gap-2' : 'gap-3'"
-    :style="{ gridTemplateColumns: `repeat(${Math.min(cards.length, 6)}, minmax(0, 1fr))` }"
+    :style="{ gridTemplateColumns: `repeat(auto-fit, minmax(${compact ? 150 : 180}px, 1fr))` }"
   >
     <component
       :is="card.status ? 'button' : 'div'"

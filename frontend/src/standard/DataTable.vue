@@ -459,8 +459,8 @@ const DENSITIES: { value: Density; label: string }[] = [
 </script>
 
 <template>
-  <div class="fn-table overflow-hidden rounded-6 border border-outline-gray-2 bg-surface-base" :class="resizing ? 'select-none' : ''">
-    <div class="flex items-center justify-between gap-2 border-b border-outline-gray-1 px-3 py-1.5">
+  <div class="fn-table overflow-hidden rounded-6 bg-surface-base" :class="resizing ? 'select-none' : ''">
+    <div class="fn-table-cap flex items-center justify-between gap-2 px-3 py-1.5">
       <span class="text-sm text-ink-gray-6">{{ caption }}</span>
       <Popover>
         <template #trigger>
@@ -743,6 +743,15 @@ const DENSITIES: { value: Density; label: string }[] = [
 </template>
 
 <style scoped>
+/* Khung bảng chính: viền đậm và đổ bóng như khối chi tiết, để các vùng trên trang tách bạch. */
+.fn-table {
+  border: 1px solid #c9d3e0;
+  box-shadow: 0 1px 3px rgb(16 24 40 / 0.08);
+}
+.fn-table-cap {
+  background: #f7f9fc;
+  border-bottom: 1px solid #d5dbe5;
+}
 .fn-th-group {
   position: sticky;
   z-index: 3;
