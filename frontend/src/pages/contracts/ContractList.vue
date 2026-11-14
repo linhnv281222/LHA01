@@ -436,9 +436,9 @@ async function runRevert(no: string) {
       {{ actionError }}
     </p>
 
-    <div v-if="canDelete" class="flex flex-wrap items-center gap-2">
+    <div v-if="canDelete" class="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <FnField v-model="allChecked" field="select-all" label="Chọn tất cả (đang lọc)" type="checkbox" :disabled="allNames === null" />
-      <span v-if="allNames === null" class="text-sm text-ink-gray-5">Lọc bớt còn tối đa {{ MAX_DELETE }} hợp đồng để chọn tất cả.</span>
+      <span v-if="allNames === null" class="min-w-0 break-words text-sm text-ink-gray-5">Lọc bớt còn tối đa {{ MAX_DELETE }} hợp đồng để chọn tất cả.</span>
       <template v-if="checked.length">
         <span class="text-base-semibold text-ink-gray-8" role="status">Đã chọn {{ checked.length }}</span>
         <Button size="sm" variant="solid" theme="red" icon-left="lucide-trash-2" label="Xóa đã chọn" :loading="deleting" :disabled="deleting" @click="askDelete(checked)" />
