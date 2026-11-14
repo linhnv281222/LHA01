@@ -2,8 +2,8 @@
 // Bố cục chia đôi của màn danh sách:
 // - Panel trái 260px (người dùng kéo mép để giãn 220-480px, nút ⇤ ở tiêu đề để thu gọn thành dải hẹp),
 //   cố định khi cuộn, cao bằng màn hình:
-//   "Truy vấn nhóm" (ô tìm kiếm TRÊN cây) → kẻ ngang → "Truy vấn chi tiết" (các ô lọc).
-//   Hai tiêu đề dính (sticky). Nút "Tìm kiếm" rộng hết panel, cố định ở đáy. Enter trong ô lọc = Tìm kiếm.
+//   "Truy vấn nhóm" (ô tìm kiếm TRÊN cây, nửa trên, cuộn riêng) → vạch xanh đậm → "Truy vấn chi tiết" (các ô lọc,
+//   nửa dưới, cuộn riêng). Tiêu đề chữ lớn, đậm. Nút "Tìm kiếm" rộng hết panel, cố định ở đáy. Enter trong ô lọc = Tìm kiếm.
 // - Vùng phải: tiêu đề trang, thẻ số liệu, bảng, chi tiết dòng chọn (do trang tự đặt vào slot mặc định).
 import { ref, watch } from 'vue'
 import { Button } from 'frappe-ui'
@@ -120,8 +120,8 @@ const emit = defineEmits<{ search: [] }>()
         @keydown="onKey"
       />
       <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="emit('search')">
-        <div class="min-h-0 flex-1 overflow-y-auto">
-          <section v-if="showGroup" aria-labelledby="fn-group-title">
+        <div class="flex min-h-0 flex-1 flex-col">
+          <section v-if="showGroup" class="fn-panel-group" aria-labelledby="fn-group-title">
             <h2 id="fn-group-title" class="fn-panel-title fn-panel-title--group flex items-center justify-between">
               <span class="flex items-center gap-2"><span class="lucide-folder-tree size-4" aria-hidden="true" />{{ groupTitle }}</span>
               <button
@@ -134,12 +134,11 @@ const emit = defineEmits<{ search: [] }>()
                 <span class="lucide-panel-left-close size-4" aria-hidden="true" />
               </button>
             </h2>
-            <div class="space-y-2 px-3 pb-3 pt-2">
+            <div class="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3 pt-1">
               <slot name="group" />
             </div>
           </section>
-          <div v-if="showGroup" class="fn-panel-gap" role="separator" />
-          <section class="fn-panel-filters" aria-labelledby="fn-filter-title">
+          <section class="fn-panel-filters" :class="showGroup ? 'fn-panel-filters--split' : ''" aria-labelledby="fn-filter-title">
             <h2 id="fn-filter-title" class="fn-panel-title fn-panel-title--filter flex items-center justify-between">
               <span class="flex items-center gap-2"><span class="lucide-sliders-horizontal size-4" aria-hidden="true" />{{ filterTitle }}</span>
               <button
@@ -202,45 +201,44 @@ const emit = defineEmits<{ search: [] }>()
   background: linear-gradient(to right, transparent 3px, theme('colors.fn.brand') 3px, theme('colors.fn.brand') 5px, transparent 5px);
   outline: none;
 }
-/* Hai khối lọc phân biệt rõ: "Truy vấn nhóm" tông xanh dương, nền trắng; "Truy vấn chi tiết" tông xanh ngọc, nền xám
-   nhạt để các ô nhập nổi lên; giữa hai khối là một dải ngăn dày. Tiêu đề là dải màu có vạch trái, dính khi cuộn. */
+/* Theo màn mẫu "Báo cáo chuyến": panel chia hai nửa, mỗi nửa cuộn riêng. "Truy vấn nhóm" ở trên (khoảng 44% chiều cao),
+   "Truy vấn chi tiết" ở dưới, ngăn bằng vạch xanh đậm 2px; tiêu đề chữ lớn, đậm, dính khi cuộn. */
 .fn-panel-title {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 9px 10px 9px 12px;
-  font-size: 12px;
+  padding: 12px 12px 8px;
+  background: var(--surface-base);
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  box-shadow: inset 4px 0 0 var(--fn-p-bar), inset 0 -1px 0 var(--fn-p-line);
-  background: var(--fn-p-bg);
-  color: var(--fn-p-ink);
+  color: var(--ink-gray-9);
 }
-.fn-panel-title--group {
-  --fn-p-bg: #e3edf8;
-  --fn-p-bar: #1d5fa8;
-  --fn-p-ink: #123e70;
-  --fn-p-line: #c9daee;
+.fn-panel-title > span > span {
+  color: theme('colors.fn.brand');
 }
 .fn-panel-title--filter {
-  --fn-p-bg: #dff1ec;
-  --fn-p-bar: #0f766e;
-  --fn-p-ink: #0b4f4a;
-  --fn-p-line: #c3e3da;
+  border-bottom: 1px solid #e3e8f0;
+  margin-bottom: 8px;
 }
-.fn-panel-gap {
-  height: 10px;
-  background: #e6eaf0;
-  border-top: 1px solid var(--outline-gray-2);
-  border-bottom: 1px solid var(--outline-gray-2);
+.fn-panel-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 44%;
+  min-height: 0;
 }
 .fn-panel-filters {
-  background: #f6f8fa;
-  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 100%;
+  overflow-y: auto;
+}
+.fn-panel-filters--split {
+  flex: 1 1 56%;
+  border-top: 2px solid theme('colors.fn.brand');
 }
 .fn-panel-foot {
-  border-top: 1px solid var(--outline-gray-2);
-  background: #f6f8fa;
+  border-top: 1px solid #e3e8f0;
+  background: var(--surface-base);
 }
 </style>

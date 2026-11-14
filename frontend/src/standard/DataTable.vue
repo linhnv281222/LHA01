@@ -410,31 +410,13 @@ function pinStyle(col: Column<T>, extra: Record<string, string> = {}) {
   return style
 }
 
-// Màu tiêu đề theo nhóm cột: mỗi nhóm (group) một tông, lần lượt xanh dương, xanh ngọc, hổ phách, tím; cột không
-// nhóm dùng tông xám. Hàng nhóm đậm hơn hàng tên cột; hàng tên cột có gạch chân cùng tông để thấy ranh giới nhóm.
-const GROUP_TONES = [
-  { g: '#D6E4F5', h: '#EBF2FB', a: '#1D5FA8', t: '#123E70' },
-  { g: '#D3ECE6', h: '#EAF6F3', a: '#0F766E', t: '#0B4F4A' },
-  { g: '#F6E3C0', h: '#FCF3E2', a: '#B45309', t: '#7A3A06' },
-  { g: '#E3DBF5', h: '#F2EEFB', a: '#6D4CC2', t: '#45307F' },
-]
-const NEUTRAL_TONE = { g: '#E6EAF0', h: '#EEF1F5', a: '#94A3B8', t: '#1F2937' }
-const toneByGroup = computed(() => {
-  const map: Record<string, (typeof GROUP_TONES)[number]> = {}
-  for (const c of visibleColumns.value) {
-    if (c.group && !map[c.group]) map[c.group] = GROUP_TONES[Object.keys(map).length % GROUP_TONES.length]
-  }
-  return map
-})
-function headVars(group?: string): Record<string, string> {
-  const t = (group && toneByGroup.value[group]) || NEUTRAL_TONE
-  return { '--fn-gh': t.g, '--fn-ch': t.h, '--fn-ca': t.a, '--fn-ct': t.t }
-}
+// Tiêu đề bảng nền VÀNG (theo màn mẫu "Báo cáo chuyến"): hàng nhóm vàng đậm, hàng tên cột vàng, hàng lọc vàng nhạt;
+// cột ghim đậm hơn một bậc. Thân bảng: cột ghim nền xanh nhạt, có vạch ranh giới. Màu đặt ở CSS (.fn-th*, .fn-pinned).
 
 function groupStyle(seg: HeaderSegment) {
   const cols = seg.keys.map((k) => colByKey.value[k])
   const width = cols.reduce((s, c) => s + c.width, 0)
-  const style: Record<string, string> = { width: `${width}px`, minWidth: `${width}px`, top: '0px', ...headVars(seg.group) }
+  const style: Record<string, string> = { width: `${width}px`, minWidth: `${width}px`, top: '0px' }
   const sides = new Set(cols.map((c) => c.pin ?? ''))
   if (sides.size === 1 && cols[0].pin) {
     const side = cols[0].pin
@@ -568,7 +550,7 @@ const DENSITIES: { value: Density; label: string }[] = [
                 :key="k"
                 class="fn-th-group fn-th-group-empty"
                 :class="cellClasses(colByKey[k])"
-                :style="pinStyle(colByKey[k], { top: '0px', ...headVars() })"
+                :style="pinStyle(colByKey[k], { top: '0px' })"
                 aria-hidden="true"
               />
             </template>
@@ -580,7 +562,7 @@ const DENSITIES: { value: Density; label: string }[] = [
               scope="col"
               class="fn-th group/th"
               :class="cellClasses(col)"
-              :style="pinStyle(col, { top: `${labelTop}px`, ...headVars(col.group) })"
+              :style="pinStyle(col, { top: `${labelTop}px` })"
               :aria-sort="ariaSort(col)"
             >
               <div class="flex items-center gap-0.5" :class="alignClass(col) === 'text-right tabular-nums' ? 'flex-row-reverse' : ''">
@@ -639,7 +621,7 @@ const DENSITIES: { value: Density; label: string }[] = [
               :key="col.key"
               class="fn-th-filter"
               :class="cellClasses(col)"
-              :style="pinStyle(col, { top: `${filterTop}px`, ...headVars(col.group) })"
+              :style="pinStyle(col, { top: `${filterTop}px` })"
             >
               <select
                 v-if="col.filter === 'select'"
@@ -766,19 +748,19 @@ const DENSITIES: { value: Density; label: string }[] = [
   z-index: 3;
   height: 30px;
   padding: 0 12px;
-  background: var(--fn-gh, theme('colors.fn.table-head'));
-  border-bottom: 1px solid rgb(255 255 255 / 0.7);
-  border-right: 2px solid #fff;
+  background: #f5cf4d;
+  border-bottom: 1px solid #e0b532;
+  border-right: 2px solid #fff6d6;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--fn-ct, var(--ink-gray-8));
+  color: #4a3700;
   text-align: center;
   white-space: nowrap;
 }
 .fn-th-group-empty {
-  background: var(--fn-ch, theme('colors.fn.table-head'));
+  background: #ffe680;
   border-right: 0;
   border-bottom-color: transparent;
 }
@@ -787,13 +769,13 @@ const DENSITIES: { value: Density; label: string }[] = [
   z-index: 2;
   height: 36px;
   padding: 0 10px 0 12px;
-  background: var(--fn-ch, theme('colors.fn.table-head'));
-  border-bottom: 2px solid var(--fn-ca, theme('colors.fn.table-head-border'));
-  color: var(--fn-ct, var(--ink-gray-8));
+  background: #ffe680;
+  border-bottom: 1px solid #d9b13a;
+  color: #3b2f00;
   white-space: nowrap;
 }
 .fn-th-label {
-  color: var(--fn-ct, var(--ink-gray-8));
+  color: #3b2f00;
 }
 .fn-th-label:hover {
   text-decoration: underline;
@@ -804,8 +786,15 @@ const DENSITIES: { value: Density; label: string }[] = [
   z-index: 2;
   height: 38px;
   padding: 3px 6px;
-  background: #fbfcfd;
-  border-bottom: 1px solid var(--outline-gray-2);
+  background: #fff3c2;
+  border-bottom: 1px solid #d9b13a;
+}
+.fn-th.fn-pinned,
+.fn-th-group-empty.fn-pinned {
+  background: #f5cf4d;
+}
+.fn-th-filter.fn-pinned {
+  background: #fbe58a;
 }
 .fn-th.fn-pinned,
 .fn-th-filter.fn-pinned,
@@ -844,7 +833,7 @@ const DENSITIES: { value: Density; label: string }[] = [
   top: 50%;
   right: 8px;
   transform: translateY(-50%);
-  background: var(--fn-ch, theme('colors.fn.table-head'));
+  background: #fff3c2;
   opacity: 0;
 }
 .fn-th:hover .fn-col-menu,
@@ -899,14 +888,21 @@ const DENSITIES: { value: Density; label: string }[] = [
 .fn-td.fn-pinned {
   position: sticky;
   z-index: 1;
-  background: theme('colors.fn.pinned');
+  background: #edf2fb;
+}
+.fn-row-even .fn-td.fn-pinned {
+  background: #e3ebf8;
+}
+.fn-row:hover .fn-td.fn-pinned {
+  background: #d3e2f8;
 }
 .fn-row:hover .fn-td {
-  background: var(--surface-gray-1);
+  background: #e6effb;
 }
 .fn-row-selected .fn-td,
-.fn-row-selected:hover .fn-td {
-  background: theme('colors.fn.selected');
+.fn-row-selected:hover .fn-td,
+.fn-row-selected .fn-td.fn-pinned {
+  background: #c7dbf6;
 }
 .fn-row-selected .fn-td:first-child {
   box-shadow: inset 3px 0 0 theme('colors.fn.brand');
@@ -931,14 +927,15 @@ const DENSITIES: { value: Density; label: string }[] = [
   outline: 2px solid theme('colors.fn.brand');
   outline-offset: -2px;
 }
+/* Ranh giới vùng cột ghim: vạch xanh 3px, thấy rõ khi cuộn ngang. */
 .fn-pin-edge-left {
-  box-shadow: 4px 0 6px -4px rgb(0 0 0 / 0.14);
+  box-shadow: 3px 0 0 #7fa6d6;
 }
 .fn-pin-edge-right {
-  box-shadow: -4px 0 6px -4px rgb(0 0 0 / 0.14);
+  box-shadow: -3px 0 0 #7fa6d6;
 }
 .fn-row-selected .fn-td.fn-pin-edge-left:first-child {
-  box-shadow: inset 3px 0 0 theme('colors.fn.brand'), 4px 0 6px -4px rgb(0 0 0 / 0.14);
+  box-shadow: inset 3px 0 0 theme('colors.fn.brand'), 3px 0 0 #7fa6d6;
 }
 .fn-td-total {
   position: sticky;
@@ -946,10 +943,10 @@ const DENSITIES: { value: Density; label: string }[] = [
   z-index: 2;
   height: 42px;
   padding: 0 12px;
-  background: theme('colors.fn.brand-soft');
-  border-top: 2px solid theme('colors.fn.brand');
+  background: #e3ebf8;
+  border-top: 2px solid #aeb7c6;
   font-weight: 700;
-  color: #123e70;
+  color: var(--ink-gray-9);
   white-space: nowrap;
 }
 .fn-td-total.fn-pinned {

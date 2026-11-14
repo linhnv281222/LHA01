@@ -89,10 +89,10 @@ Hàm: `formatDate`, `formatDateTime`, `formatNumber`, `formatCurrency`, `maskSen
 7. Chi tiết dòng hiện ngay dưới bảng, có nút "Cập nhật" (quick action sang form) và lịch sử liên quan (`MiniTable`).
 8. Nút trên dòng (Sửa...) dùng slot `#cell-_actions` với `ActionButton icon-only size="sm"` (Sửa: `kind="edit"`); nút gọi hàm
    (không có `route`) thì thêm `@click.stop` để không chọn dòng.
-9. Màu tự động, KHÔNG tự tô thêm: tiêu đề bảng tô theo nhóm cột (`group`: mỗi nhóm một tông, cột không nhóm màu xám), dòng Tổng
-   nền xanh nhạt; thẻ số liệu tô theo `tone` (tổng: để trống = xanh dương, đã thu `green`, còn phải thu `amber`, quá hạn `red`)
-   hoặc theo trạng thái của thẻ; panel trái "Truy vấn nhóm" (xanh dương) và "Truy vấn chi tiết" (xanh ngọc) do SplitLayout vẽ.
-   Muốn màu tiêu đề bảng có nghĩa thì gom cột theo nhóm nghiệp vụ (`group: 'Hiệu lực'`, `group: 'Tiền (VND)'`).
+9. Màu tự động, KHÔNG tự tô thêm (theo màn mẫu "Báo cáo chuyến"): tiêu đề bảng nền vàng (hàng nhóm vàng đậm, hàng lọc
+   vàng nhạt, cột ghim đậm hơn), cột ghim ở thân bảng nền xanh nhạt có vạch ranh giới, dòng Tổng nền xanh nhạt; thẻ số liệu tô
+   theo `tone` (tổng: để trống = xanh dương, đã thu `green`, còn phải thu `amber`, quá hạn `red`) hoặc theo trạng thái của thẻ;
+   panel trái chia hai nửa cuộn riêng "Truy vấn nhóm" / "Truy vấn chi tiết" do SplitLayout vẽ.
 
 Truy vấn nhóm của màn chứng từ (hợp đồng, đề nghị thanh toán, hóa đơn, phiếu thu...): cây Năm → Tháng → Đối tác → Chứng từ,
 năm mới nhất trên, mặc định mở năm hiện tại; trạng thái lọc bằng thẻ số liệu và ô ở truy vấn chi tiết, không đưa vào cây.
