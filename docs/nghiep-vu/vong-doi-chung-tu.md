@@ -96,6 +96,7 @@ stateDiagram-v2
     ĐangHiệuLực --> HếtHạn: scheduler hằng ngày, quá end_date
     ĐangHiệuLực --> ĐãThanhLý: Thanh lý
     ĐangHiệuLực --> ĐãHủy: Hủy hợp đồng (chỉ khi chưa có hóa đơn/tiền thu)
+    ĐangHiệuLực --> Nháp: Chuyển về Nháp (System Manager, chỉ khi chưa có hóa đơn/tiền thu)
     state "Đang hiệu lực" as ĐangHiệuLực
     state "Hết hạn" as HếtHạn
     state "Đã thanh lý" as ĐãThanhLý
@@ -105,7 +106,7 @@ stateDiagram-v2
 | Trạng thái | Điều kiện vào | Sự kiện chuyển | Sửa được? | Hủy được? | Xóa được? |
 |---|---|---|---|---|---|
 | Nháp | Tạo mới (`before_insert` đặt `Nháp`, `contract.py:139`). Chưa có đợt thu | Kích hoạt (cần ≥ 1 hạng mục, `contract.py:348-349`) → Đang hiệu lực. Hủy hợp đồng → Đã hủy | Có, tự do | Có | Có (`on_trash`: chỉ Nháp và chưa có đợt gắn chứng từ, `contract.py:316-318`) |
-| Đang hiệu lực | Kích hoạt từ Nháp; đợt thu được sinh trong cùng giao dịch (`contract.py:304-305`) | Hết hạn (scheduler, `end_date` đã đặt và < hôm nay, `tasks.py:22-34`); Thanh lý; Hủy | Có. Lưu lại thì đợt chưa có hóa đơn/tiền thu bị sinh lại, đợt đã có giữ nguyên (`payment_schedule.py:310-323`) | Có, **chỉ khi không đợt nào có hóa đơn Hiệu lực hoặc tiền thu** (`contract.py:357-358`) | Không ("Chỉ xóa được hợp đồng ở trạng thái Nháp") |
+| Đang hiệu lực | Kích hoạt từ Nháp; đợt thu được sinh trong cùng giao dịch (`contract.py:304-305`) | Hết hạn (scheduler, `end_date` đã đặt và < hôm nay, `tasks.py:22-34`); Thanh lý; Hủy; **Chuyển về Nháp (chỉ System Manager, chỉ khi chưa có chứng từ; đợt chưa chứng từ bị xóa)**, xem [đề xuất](../quyet-dinh/2026-11-14-chuyen-hop-dong-ve-nhap.md) | Có. Lưu lại thì đợt chưa có hóa đơn/tiền thu bị sinh lại, đợt đã có giữ nguyên (`payment_schedule.py:310-323`) | Có, **chỉ khi không đợt nào có hóa đơn Hiệu lực hoặc tiền thu** (`contract.py:357-358`) | Không ("Chỉ xóa được hợp đồng ở trạng thái Nháp") |
 | Hết hạn | Scheduler hằng ngày, không chạm vào đợt thu | Không có chuyển tiếp nào trong code (không thanh lý, không gia hạn) | Không (`LOCKED_STATUSES`, `contract.py:43,157-158`). Vẫn ghi được hóa đơn / thu tiền | Không | Không |
 | Đã thanh lý | Thanh lý từ Đang hiệu lực | Cuối vòng đời | Không. Vẫn ghi được hóa đơn / thu tiền | Không | Không |
 | Đã hủy | Hủy từ Nháp hoặc Đang hiệu lực (nếu chưa có chứng từ, `contract.py:353-359`). Đợt chưa chứng từ bị xóa (`contract.py:306-309`) | Cuối vòng đời | Không | — | Không. Không lập hóa đơn / thu tiền được (không thuộc `BILLABLE_CONTRACT_STATUSES`) |

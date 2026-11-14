@@ -46,6 +46,55 @@ export const canLiquidate = (status: string | undefined | null) => status === '�
 export const isLocked = (status: string | undefined | null) =>
   status === 'Hết hạn' || status === 'Đã thanh lý' || status === 'Đã hủy'
 
+// ---- Xóa nhiều, chuyển về Nháp ----
+
+/** Mỗi lần xóa tối đa bấy nhiêu hợp đồng (khớp MAX_DELETE ở api.py). */
+export const MAX_DELETE = 100
+/** Số hợp đồng liệt kê tối đa trong hộp thoại xác nhận. */
+export const CONFIRM_LIST_LIMIT = 10
+
+export interface DeleteResult {
+  deleted: string[]
+  skipped: { name: string; reason: string }[]
+}
+
+/** Nháp và có quyền xóa thì panel hiện nút "Xóa hợp đồng". */
+export const canDeleteInPanel = (status: string | undefined | null, canDelete: boolean) =>
+  canDelete && status === 'Nháp'
+/** Chỉ Admin (System Manager) và chỉ hợp đồng Đang hiệu lực mới có nút "Chuyển về Nháp". */
+export const canRevert = (status: string | undefined | null, isAdmin: boolean) =>
+  isAdmin && status === 'Đang hiệu lực'
+
+export function toggleSelected(list: string[], name: string, on: boolean): string[] {
+  const rest = list.filter((n) => n !== name)
+  return on ? [...rest, name] : rest
+}
+/** Bỏ các tên không còn trong danh sách đang hiện. */
+export function pruneSelected(list: string[], rowNames: string[]): string[] {
+  const keep = new Set(rowNames)
+  return list.filter((n) => keep.has(n))
+}
+/** Tên các dòng để chọn tất cả; quá giới hạn một lần xóa thì null. */
+export function selectAllNames(rows: { name: string }[]): string[] | null {
+  return rows.length > MAX_DELETE ? null : rows.map((r) => r.name)
+}
+export function deleteConfirmTitle(names: string[]): string {
+  return names.length === 1 ? `Xóa hợp đồng ${names[0]}?` : `Xóa ${names.length} hợp đồng?`
+}
+/** Nội dung xác nhận: liệt kê số hợp đồng (tối đa CONFIRM_LIST_LIMIT), phần còn lại gộp "và N hợp đồng khác". */
+export function deleteConfirmMessage(names: string[]): string {
+  const shown = names.slice(0, CONFIRM_LIST_LIMIT).join(', ')
+  const more = names.length - CONFIRM_LIST_LIMIT
+  return more > 0 ? `${shown} và ${more} hợp đồng khác.` : `${shown}.`
+}
+export function deleteResultText(r: DeleteResult): string {
+  return `Đã xóa ${r.deleted.length}, bỏ qua ${r.skipped.length}`
+}
+/** Hợp đồng đang mở ở panel bị xóa thì panel phải đóng. */
+export function panelClosesAfterDelete(selected: string | null, deleted: string[]): boolean {
+  return !!selected && deleted.includes(selected)
+}
+
 /** "Đã hủy" → "hủy", "Hết hạn" → "hết hạn" (ghép vào "đã ..."). */
 export function statusWord(status: string): string {
   return lowerFirst(status.replace(/^Đã /, ''))
@@ -126,6 +175,19 @@ export const COLUMNS: Column<Contract>[] = [
   { key: 'responsible_name', label: 'Phụ trách', width: 110 },
   { key: '_actions', label: 'Thao tác', width: 72, pin: 'right', sortable: false, filter: 'none', required: true },
 ]
+
+/** Cột checkbox chọn nhiều (vẽ bằng slot #cell-_select), chỉ có khi người dùng được xóa. */
+export const SELECT_COLUMN: Column<Contract> = {
+  key: '_select',
+  label: 'Chọn',
+  width: 52,
+  pin: 'left',
+  sortable: false,
+  filter: 'none',
+  required: true,
+}
+export const listColumns = (canDelete: boolean): Column<Contract>[] =>
+  canDelete ? [SELECT_COLUMN, ...COLUMNS] : COLUMNS
 
 /** Tỷ lệ đã thu (%), làm tròn nguyên, 0..100; tổng bằng 0 thì 0. */
 export function collectedPercent(paid: number | null | undefined, total: number | null | undefined): number {

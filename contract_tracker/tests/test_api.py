@@ -3,6 +3,7 @@ from frappe.tests import IntegrationTestCase
 
 from contract_tracker.api import (
 	contract_no_exists,
+	delete_contracts,
 	get_acceptable_schedules,
 	get_billing_permissions,
 	get_contract_permissions,
@@ -181,3 +182,74 @@ class TestApi(IntegrationTestCase):
 		self.assertTrue(get_contract_permissions()["can_write"])
 		frappe.set_user(make_user("quyen.xem@example.com", VIEWER))
 		self.assertFalse(get_contract_permissions()["can_write"])
+
+	def test_contract_permissions_flags(self):
+		self.assertEqual(get_contract_permissions(), {"can_write": True, "can_delete": True, "can_revert": True})
+		frappe.set_user(make_user("co.xoa.quan.ly@example.com", MANAGER))
+		self.assertEqual(get_contract_permissions(), {"can_write": True, "can_delete": True, "can_revert": False})
+		frappe.set_user(make_user("co.xoa.xem@example.com", VIEWER))
+		self.assertEqual(get_contract_permissions(), {"can_write": False, "can_delete": False, "can_revert": False})
+
+	# ---- xóa hàng loạt hợp đồng ----
+
+	def test_delete_contracts_three_drafts(self):
+		names = [make_contract().insert().name for _i in range(3)]
+		result = delete_contracts(names)
+		self.assertEqual(result, {"deleted": names, "skipped": []})
+		for n in names:
+			self.assertFalse(frappe.db.exists("Contract", n))
+
+	def test_delete_contracts_mixed(self):
+		drafts = [make_contract().insert().name for _i in range(3)]
+		actives = []
+		for _i in range(2):
+			doc = make_contract().insert()
+			doc.activate()
+			actives.append(doc.name)
+		schedule_count = {n: frappe.db.count("Payment Schedule", {"contract": n}) for n in actives}
+		result = delete_contracts(drafts + actives)
+		self.assertEqual(result["deleted"], drafts)
+		self.assertEqual([s["name"] for s in result["skipped"]], actives)
+		for s in result["skipped"]:
+			self.assertIn("Chỉ xóa được hợp đồng ở trạng thái Nháp", s["reason"])
+		for n in actives:
+			self.assertEqual(frappe.db.get_value("Contract", n, "status"), "Đang hiệu lực")
+			self.assertEqual(frappe.db.count("Payment Schedule", {"contract": n}), schedule_count[n])
+
+	def test_delete_contracts_manager_ok(self):
+		name = make_contract().insert().name
+		frappe.set_user(make_user("xoa.hop.dong.quan.ly@example.com", MANAGER))
+		self.assertEqual(delete_contracts([name])["deleted"], [name])
+
+	def test_delete_contracts_viewer_rejected(self):
+		name = make_contract().insert().name
+		frappe.set_user(make_user("xoa.hop.dong.xem@example.com", VIEWER))
+		with self.assertRaises(frappe.PermissionError):
+			delete_contracts([name])
+		self.assertTrue(frappe.db.exists("Contract", name))
+
+	def test_delete_contracts_admin_active_skipped(self):
+		doc = make_contract().insert()
+		doc.activate()
+		result = delete_contracts([doc.name])
+		self.assertEqual(result["deleted"], [])
+		self.assertEqual([s["name"] for s in result["skipped"]], [doc.name])
+		self.assertTrue(frappe.db.exists("Contract", doc.name))
+
+	def test_delete_contracts_after_revert(self):
+		doc = make_contract().insert()
+		doc.activate()
+		frappe.get_doc("Contract", doc.name).revert_to_draft()
+		self.assertEqual(delete_contracts([doc.name])["deleted"], [doc.name])
+
+	def test_delete_contracts_limit_and_empty(self):
+		with self.assertRaises(frappe.ValidationError):
+			delete_contracts([f"HD-{i}" for i in range(101)])
+		with self.assertRaises(frappe.ValidationError):
+			delete_contracts([])
+
+	def test_delete_contracts_json_string_missing_and_duplicate(self):
+		name = make_contract().insert().name
+		result = delete_contracts(frappe.as_json([name, name, "HD-KHONG-CO", ""]))
+		self.assertEqual(result["deleted"], [name])
+		self.assertEqual(result["skipped"], [{"name": "HD-KHONG-CO", "reason": "Không tìm thấy hợp đồng."}])

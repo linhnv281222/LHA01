@@ -3,9 +3,14 @@
 """Các hàm nhỏ cho giao diện Vue mà REST chuẩn của Frappe không đáp ứng được."""
 
 import frappe
-from frappe.utils import flt
+from frappe import _
+from frappe.utils import flt, strip_html
 
-from contract_tracker.contract_tracker.doctype.contract.contract import TOLERANCE
+from contract_tracker.contract_tracker.doctype.contract.contract import (
+	MSG_DELETE_NOT_DRAFT,
+	STATUS_DRAFT,
+	TOLERANCE,
+)
 from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import (
 	BILLABLE_CONTRACT_STATUSES,
 	active_invoice_by_schedule,
@@ -15,6 +20,12 @@ from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule
 )
 
 from contract_tracker.setup import ROLES as APP_ROLES
+
+MAX_DELETE = 100
+MSG_DELETE_NONE = "Chưa chọn hợp đồng nào để xóa."
+MSG_DELETE_LIMIT = "Mỗi lần chỉ xóa được tối đa 100 hợp đồng."
+MSG_DELETE_NOT_FOUND = "Không tìm thấy hợp đồng."
+MSG_DELETE_NO_PERMISSION = "Bạn không có quyền xóa hợp đồng này."
 
 BANK_FIELDS = ("bank_account_holder", "bank_account_no", "bank_name", "bank_branch")
 
@@ -58,8 +69,51 @@ def contract_no_exists(contract_no: str | None = None) -> bool:
 
 @frappe.whitelist()
 def get_contract_permissions() -> dict:
-	"""Người dùng hiện tại có sửa được hợp đồng không (để form ẩn nút Lưu và khóa ô)."""
-	return {"can_write": bool(frappe.has_permission("Contract", "write"))}
+	"""Quyền của người dùng hiện tại trên hợp đồng (để giao diện ẩn nút và khóa ô; server vẫn kiểm lại)."""
+	return {
+		"can_write": bool(frappe.has_permission("Contract", "write")),
+		"can_delete": bool(frappe.has_permission("Contract", "delete")),
+		"can_revert": "System Manager" in frappe.get_roles(),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def delete_contracts(names) -> dict:
+	"""Xóa nhiều hợp đồng; từng hợp đồng xử lý độc lập. Trả {deleted: [...], skipped: [{name, reason}]}."""
+	if isinstance(names, str):
+		names = frappe.parse_json(names)
+	if not isinstance(names, list):
+		frappe.throw(_(MSG_DELETE_NONE))
+	names = list(dict.fromkeys(str(n).strip() for n in names if n and str(n).strip()))
+	if not names:
+		frappe.throw(_(MSG_DELETE_NONE))
+	if len(names) > MAX_DELETE:
+		frappe.throw(_(MSG_DELETE_LIMIT))
+	frappe.has_permission("Contract", "delete", throw=True)
+
+	deleted, skipped = [], []
+	for name in names:
+		if not frappe.db.exists("Contract", name):
+			skipped.append({"name": name, "reason": _(MSG_DELETE_NOT_FOUND)})
+		elif not frappe.has_permission("Contract", "delete", doc=name):
+			skipped.append({"name": name, "reason": _(MSG_DELETE_NO_PERMISSION)})
+		else:
+			frappe.db.savepoint("delete_contract")
+			try:
+				# Khóa dòng Contract trước khi kiểm, để không chạy chồng với Kích hoạt (chuẩn A4).
+				status = frappe.db.get_value("Contract", name, "status", for_update=True)
+				if status != STATUS_DRAFT:
+					skipped.append({"name": name, "reason": _(MSG_DELETE_NOT_DRAFT)})
+					continue
+				# Không ignore_permissions, không force: để kiểm quyền, liên kết và chạy on_trash.
+				frappe.delete_doc("Contract", name)
+				deleted.append(name)
+			except (frappe.ValidationError, frappe.PermissionError) as e:
+				frappe.db.rollback(save_point="delete_contract")
+				skipped.append({"name": name, "reason": strip_html(str(e))})
+				# Lỗi đã được xử lý nên xóa thông báo để response không bật lỗi lên giao diện.
+				frappe.clear_messages()
+	return {"deleted": deleted, "skipped": skipped}
 
 
 @frappe.whitelist()
