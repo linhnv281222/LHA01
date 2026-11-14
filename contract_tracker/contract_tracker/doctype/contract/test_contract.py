@@ -343,6 +343,28 @@ class IntegrationTestContract(IntegrationTestCase):
 		self.assertIn("Đã hủy", str(cm.exception))
 		self.assertTrue(frappe.db.exists("Contract", doc.name))
 
+	def test_delete_cancelled_ok(self):
+		doc = make_contract().insert()
+		doc.cancel_contract()
+		frappe.delete_doc("Contract", doc.name)
+		self.assertFalse(frappe.db.exists("Contract", doc.name))
+
+	def test_delete_active_rejected_new_message(self):
+		doc = make_contract().insert()
+		doc.activate()
+		with self.assertRaises(frappe.ValidationError) as cm:
+			frappe.delete_doc("Contract", doc.name)
+		self.assertIn("Chỉ xóa được hợp đồng ở trạng thái Nháp hoặc Đã hủy.", str(cm.exception))
+
+	def test_delete_expired_and_liquidated_rejected(self):
+		for status in ("Hết hạn", "Đã thanh lý"):
+			doc = make_contract().insert()
+			doc.activate()
+			frappe.db.set_value("Contract", doc.name, "status", status)
+			with self.assertRaises(frappe.ValidationError):
+				frappe.delete_doc("Contract", doc.name)
+			self.assertTrue(frappe.db.exists("Contract", doc.name))
+
 	# ---- chuyển về Nháp ----
 
 	def _active_recurring(self, **kw):

@@ -14,7 +14,7 @@ MSG_DUPLICATE = "Số hợp đồng {0} đã tồn tại."
 MSG_END_REQUIRED = "Hợp đồng có hạng mục Định kỳ nên phải nhập ngày kết thúc."
 MSG_END_BEFORE_START = "Ngày kết thúc phải từ ngày bắt đầu trở đi."
 MSG_NO_ITEMS = "Hợp đồng chưa có hạng mục, không kích hoạt được."
-MSG_DELETE_NOT_DRAFT = "Chỉ xóa được hợp đồng ở trạng thái Nháp. Hãy chuyển hợp đồng sang Đã hủy."
+MSG_DELETE_NOT_DRAFT = "Chỉ xóa được hợp đồng ở trạng thái Nháp hoặc Đã hủy."
 MSG_REVERT_BILLED = "Hợp đồng đã có đợt thu gắn chứng từ, không chuyển về Nháp được."
 MSG_REVERT_ADMIN_ONLY = "Chỉ quản trị hệ thống (System Manager) được chuyển hợp đồng về Nháp."
 MSG_LOCKED = "Hợp đồng {0} đã {1}, không sửa được."
@@ -43,6 +43,8 @@ STATUS_EXPIRED = "Hết hạn"
 STATUS_LIQUIDATED = "Đã thanh lý"
 STATUS_CANCELLED = "Đã hủy"
 LOCKED_STATUSES = (STATUS_EXPIRED, STATUS_LIQUIDATED, STATUS_CANCELLED)
+# Chỉ hợp đồng ở các trạng thái này mới xóa được (và không có đợt gắn chứng từ).
+DELETABLE_STATUSES = (STATUS_DRAFT, STATUS_CANCELLED)
 
 PERIOD_DAY = "Ngày"
 PERIOD_MONTHS = {"Tháng": 1, "Quý": 3, "6 tháng": 6, "Năm": 12}
@@ -320,7 +322,7 @@ class Contract(Document):
 	# ---- xóa ----
 
 	def on_trash(self):
-		if self.status != STATUS_DRAFT or has_billed_installments(self.name):
+		if self.status not in DELETABLE_STATUSES or has_billed_installments(self.name):
 			frappe.throw(_(MSG_DELETE_NOT_DRAFT))
 
 	# ---- đổi trạng thái ----

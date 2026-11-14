@@ -13,6 +13,7 @@ import {
   actionState,
   applyQuick,
   canPick,
+  contractsOf,
   emptyFilters,
   filtersActive,
   groupTree,
@@ -59,8 +60,26 @@ describe('cột và thứ tự mặc định', () => {
   it('có đủ cột trạng thái và cột ghim', () => {
     const labels = COLUMNS.map((c) => c.label)
     for (const l of ['Nghiệm thu', 'Đề nghị thanh toán', 'Hóa đơn', 'Thanh toán', 'Quá hạn']) expect(labels).toContain(l)
-    expect(COLUMNS.filter((c) => c.pin === 'left').map((c) => c.key)).toEqual(['_pick', '_index', 'contract'])
+    expect(COLUMNS.filter((c) => c.pin === 'left').map((c) => c.key)).toEqual(['_pick', '_installment', 'contract'])
     expect(COLUMNS.every((c) => c.width > 0)).toBe(true)
+  })
+  it('STT là "Đợt n" ghim trái, không có Tổng; Tiến trình là cột cuối, không sắp xếp, không lọc', () => {
+    const stt = COLUMNS.find((c) => c.key === '_installment')!
+    expect(stt.label).toBe('STT')
+    expect(stt.sum).toBeFalsy()
+    expect(stt.format?.({ name: 'x', installment_no: 3 } as ScheduleListRow)).toBe('Đợt 3')
+    const last = COLUMNS[COLUMNS.length - 1]
+    expect(last.key).toBe('_timeline')
+    expect(last.label).toBe('Tiến trình')
+    expect(last.sortable).toBe(false)
+    expect(last.filter).toBe('none')
+    expect(last.pin).toBeUndefined()
+    for (const k of ['acceptance_status', 'request_status', 'invoice_status', 'payment_status', 'is_overdue']) {
+      expect(COLUMNS.some((c) => c.key === k)).toBe(true)
+    }
+  })
+  it('contractsOf bỏ trùng hợp đồng', () => {
+    expect(contractsOf([{ contract: 'A' }, { contract: 'B' }, { contract: 'A' }])).toEqual(['A', 'B'])
   })
   it('cột tiền có dòng Tổng, cột ít dùng ẩn mặc định', () => {
     expect(COLUMNS.filter((c) => c.sum).map((c) => c.key)).toEqual([

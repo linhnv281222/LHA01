@@ -32,6 +32,28 @@ class PaymentSchedule(Document):
 			self.acceptance_status = "Chưa" if self.requires_acceptance else "Không cần"
 
 
+def installment_numbers(contracts: list[str]) -> dict[str, int]:
+	"""Số đợt của mỗi đợt thu: sắp theo ngày đến hạn rồi mã đợt, đếm từ 1 riêng từng hợp đồng.
+
+	Tính khi đọc trên toàn bộ đợt của hợp đồng (không phụ thuộc bộ lọc của màn hình), không lưu.
+	"""
+	if not contracts:
+		return {}
+	rows = frappe.get_all(
+		"Payment Schedule",
+		filters={"contract": ["in", contracts]},
+		fields=["name", "contract"],
+		order_by="contract asc, due_date asc, name asc",
+		limit_page_length=0,
+	)
+	counters: dict[str, int] = {}
+	result: dict[str, int] = {}
+	for r in rows:
+		counters[r.contract] = counters.get(r.contract, 0) + 1
+		result[r.name] = counters[r.contract]
+	return result
+
+
 def has_documents(schedule) -> bool:
 	"""Đợt này đã có chứng từ (hóa đơn Hiệu lực hoặc tiền thu phân bổ) chưa.
 

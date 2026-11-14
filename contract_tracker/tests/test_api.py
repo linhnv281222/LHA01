@@ -7,6 +7,7 @@ from contract_tracker.api import (
 	get_acceptable_schedules,
 	get_billing_permissions,
 	get_contract_permissions,
+	get_installment_numbers,
 	get_open_schedules,
 	get_payment_request_defaults,
 	get_receivable_schedules,
@@ -15,7 +16,7 @@ from contract_tracker.api import (
 	get_responsible_users,
 	suggest_allocation,
 )
-from contract_tracker.contract_tracker.doctype.contract.test_contract import make_contract
+from contract_tracker.contract_tracker.doctype.contract.test_contract import example_contract, make_contract
 from contract_tracker.contract_tracker.doctype.payment_receipt.test_payment_receipt import make_receipt
 from contract_tracker.contract_tracker.doctype.payment_request.test_payment_request import make_request
 from contract_tracker.contract_tracker.doctype.sales_invoice_record.test_sales_invoice_record import (
@@ -241,6 +242,76 @@ class TestApi(IntegrationTestCase):
 		doc.activate()
 		frappe.get_doc("Contract", doc.name).revert_to_draft()
 		self.assertEqual(delete_contracts([doc.name])["deleted"], [doc.name])
+
+	def _cancelled(self):
+		doc = make_contract().insert()
+		doc.cancel_contract()
+		return doc.name
+
+	def test_delete_contracts_cancelled_ok(self):
+		name = self._cancelled()
+		self.assertEqual(delete_contracts([name]), {"deleted": [name], "skipped": []})
+		self.assertFalse(frappe.db.exists("Contract", name))
+
+	def test_delete_contracts_mixed_with_cancelled(self):
+		drafts = [make_contract().insert().name for _i in range(2)]
+		cancelled = self._cancelled()
+		actives = []
+		for _i in range(2):
+			doc = make_contract().insert()
+			doc.activate()
+			actives.append(doc.name)
+		schedule_count = {n: frappe.db.count("Payment Schedule", {"contract": n}) for n in actives}
+		result = delete_contracts(drafts + [cancelled] + actives)
+		self.assertEqual(result["deleted"], drafts + [cancelled])
+		self.assertEqual([s["name"] for s in result["skipped"]], actives)
+		for s in result["skipped"]:
+			self.assertEqual(s["reason"], "Chỉ xóa được hợp đồng ở trạng thái Nháp hoặc Đã hủy.")
+		for n in actives:
+			self.assertEqual(frappe.db.get_value("Contract", n, "status"), "Đang hiệu lực")
+			self.assertEqual(frappe.db.count("Payment Schedule", {"contract": n}), schedule_count[n])
+
+	def test_delete_cancelled_viewer_rejected(self):
+		name = self._cancelled()
+		frappe.set_user(make_user("xoa.da.huy.xem@example.com", VIEWER))
+		with self.assertRaises(frappe.PermissionError):
+			delete_contracts([name])
+		self.assertTrue(frappe.db.exists("Contract", name))
+
+	def test_delete_cancelled_manager_ok(self):
+		name = self._cancelled()
+		frappe.set_user(make_user("xoa.da.huy.quan.ly@example.com", MANAGER))
+		self.assertEqual(delete_contracts([name])["deleted"], [name])
+
+	# ---- số đợt ----
+
+	def test_installment_numbers_two_contracts(self):
+		a, b = example_contract().insert(), example_contract().insert()
+		a.activate()
+		b.activate()
+		result = get_installment_numbers([a.name, b.name])
+		for doc in (a, b):
+			names = frappe.get_all("Payment Schedule", filters={"contract": doc.name}, pluck="name")
+			self.assertEqual(sorted(result[n] for n in names), list(range(1, len(names) + 1)))
+
+	def test_installment_numbers_ignore_filter(self):
+		# HD-A có 3 đợt đến hạn 15/01, 15/02, 15/03/2027 (gán ngược thứ tự mã đợt để chứng minh sắp theo ngày).
+		doc = example_contract().insert()
+		doc.activate()
+		names = sorted(frappe.get_all("Payment Schedule", filters={"contract": doc.name}, pluck="name"))
+		self.assertGreaterEqual(len(names), 3)
+		dates = ["2027-03-15", "2027-02-15", "2027-01-15"] + [f"2027-0{4 + i}-15" for i in range(len(names) - 3)]
+		for n, d in zip(names, dates, strict=True):
+			frappe.db.set_value("Payment Schedule", n, "due_date", d)
+		result = get_installment_numbers(frappe.as_json([doc.name]))
+		self.assertEqual([result[n] for n in names[:3]], [3, 2, 1])
+		self.assertEqual(sorted(result.values()), list(range(1, len(names) + 1)))
+
+	def test_installment_numbers_viewer_ok(self):
+		doc = make_contract().insert()
+		doc.activate()
+		frappe.set_user(make_user("so.dot.xem@example.com", VIEWER))
+		self.assertTrue(get_installment_numbers([doc.name]))
 
 	def test_delete_contracts_limit_and_empty(self):
 		with self.assertRaises(frappe.ValidationError):

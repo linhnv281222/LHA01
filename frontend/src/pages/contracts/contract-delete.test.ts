@@ -73,10 +73,12 @@ describe('panel chi tiết', () => {
     expect(panelClosesAfterDelete('HD-3', ['HD-1', 'HD-2'])).toBe(false)
     expect(panelClosesAfterDelete(null, ['HD-1'])).toBe(false)
   })
-  it('nút Xóa hợp đồng: chỉ Nháp và có quyền xóa', () => {
+  it('nút Xóa hợp đồng: Nháp hoặc Đã hủy và có quyền xóa', () => {
     expect(canDeleteInPanel('Nháp', true)).toBe(true)
     expect(canDeleteInPanel('Nháp', false)).toBe(false)
-    for (const s of ['Đang hiệu lực', 'Hết hạn', 'Đã thanh lý', 'Đã hủy']) expect(canDeleteInPanel(s, true)).toBe(false)
+    expect(canDeleteInPanel('Đã hủy', true)).toBe(true)
+    expect(canDeleteInPanel('Đã hủy', false)).toBe(false)
+    for (const s of ['Đang hiệu lực', 'Hết hạn', 'Đã thanh lý']) expect(canDeleteInPanel(s, true)).toBe(false)
   })
   it('nút Chuyển về Nháp: chỉ Admin và hợp đồng Đang hiệu lực', () => {
     expect(canRevert('Đang hiệu lực', true)).toBe(true)

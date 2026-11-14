@@ -21,7 +21,8 @@ import {
   type SelectOption,
 } from '@/standard'
 import type { ContractCustomer } from '@/types/doctypes'
-import { periodText } from '@/pages/contracts/contract'
+import { installmentNoText, periodText, withInstallmentNo } from '@/pages/contracts/contract'
+import ScheduleTimeline from '@/pages/contracts/ScheduleTimeline.vue'
 import {
   DOCTYPE,
   LIMIT,
@@ -34,6 +35,7 @@ import {
   actionState,
   applyQuick,
   canPick,
+  contractsOf,
   emptyFilters,
   filtersActive,
   fmt,
@@ -81,7 +83,29 @@ const list = useList<ScheduleListRow>({
   orderBy: ORDER_BY,
   limit: LIMIT,
 })
-const rows = computed(() => list.data ?? [])
+const rawRows = computed(() => list.data ?? [])
+
+// Số đợt do server tính trên toàn bộ đợt của từng hợp đồng nên lọc/sắp xếp/phân trang không đổi số.
+// Lỗi thì ô STT để trống và báo bằng toast, bảng vẫn dùng được.
+const numbersCall = useCall<Record<string, number>, { contracts: string[] }>({
+  url: '/api/v2/method/contract_tracker.api.get_installment_numbers',
+  method: 'POST',
+  immediate: false,
+})
+watch(
+  () => contractsOf(rawRows.value).join('|'),
+  async () => {
+    const contractList = contractsOf(rawRows.value)
+    if (!contractList.length) return
+    try {
+      await numbersCall.submit({ contracts: contractList })
+    } catch (err) {
+      toast.error(serverErrorMessage(err))
+    }
+  },
+  { immediate: true },
+)
+const rows = computed(() => withInstallmentNo(rawRows.value, numbersCall.data as Record<string, number> | null))
 watch(
   () => rows.value.length,
   (n) => {
@@ -190,6 +214,7 @@ const detailFields = computed<DetailField[]>(() => {
     { label: 'Số hợp đồng', value: r.contract },
     { label: 'Khách hàng', value: r.customer_name },
     { label: 'Hạng mục', value: r.item_name },
+    { label: 'Số đợt', value: installmentNoText(r) },
     { label: 'Tên đợt', value: r.schedule_name },
     { label: 'Kỳ', value: periodText(r) },
     { label: 'Ngày đến hạn', value: formatDate(r.due_date) },
@@ -309,6 +334,7 @@ function exportExcel() {
           />
         </span>
       </template>
+      <template #cell-_timeline="{ row }"><ScheduleTimeline :row="row as ScheduleListRow" /></template>
     </DataTable>
     <p v-if="!list.loading && !list.error && !rows.length" class="text-base text-ink-gray-5">{{ MSG_EMPTY }}</p>
 
@@ -322,6 +348,7 @@ function exportExcel() {
           :route="`/contracts/${encodeURIComponent(current.contract)}/edit`"
         />
       </template>
+      <div class="overflow-x-auto"><ScheduleTimeline :row="current" /></div>
     </DetailPanel>
   </SplitLayout>
 </template>

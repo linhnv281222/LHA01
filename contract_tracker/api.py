@@ -7,13 +7,14 @@ from frappe import _
 from frappe.utils import flt, strip_html
 
 from contract_tracker.contract_tracker.doctype.contract.contract import (
+	DELETABLE_STATUSES,
 	MSG_DELETE_NOT_DRAFT,
-	STATUS_DRAFT,
 	TOLERANCE,
 )
 from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import (
 	BILLABLE_CONTRACT_STATUSES,
 	active_invoice_by_schedule,
+	installment_numbers,
 	minutes_by_schedule,
 	paid_by_schedule,
 	request_by_schedule,
@@ -26,6 +27,8 @@ MSG_DELETE_NONE = "Chưa chọn hợp đồng nào để xóa."
 MSG_DELETE_LIMIT = "Mỗi lần chỉ xóa được tối đa 100 hợp đồng."
 MSG_DELETE_NOT_FOUND = "Không tìm thấy hợp đồng."
 MSG_DELETE_NO_PERMISSION = "Bạn không có quyền xóa hợp đồng này."
+MAX_INSTALLMENT_CONTRACTS = 5000
+MSG_INSTALLMENT_LIMIT = "Mỗi lần chỉ lấy số đợt cho tối đa 5000 hợp đồng."
 
 BANK_FIELDS = ("bank_account_holder", "bank_account_no", "bank_name", "bank_branch")
 
@@ -102,7 +105,7 @@ def delete_contracts(names) -> dict:
 			try:
 				# Khóa dòng Contract trước khi kiểm, để không chạy chồng với Kích hoạt (chuẩn A4).
 				status = frappe.db.get_value("Contract", name, "status", for_update=True)
-				if status != STATUS_DRAFT:
+				if status not in DELETABLE_STATUSES:
 					skipped.append({"name": name, "reason": _(MSG_DELETE_NOT_DRAFT)})
 					continue
 				# Không ignore_permissions, không force: để kiểm quyền, liên kết và chạy on_trash.
@@ -114,6 +117,22 @@ def delete_contracts(names) -> dict:
 				# Lỗi đã được xử lý nên xóa thông báo để response không bật lỗi lên giao diện.
 				frappe.clear_messages()
 	return {"deleted": deleted, "skipped": skipped}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_installment_numbers(contracts) -> dict:
+	"""Số đợt (1, 2, 3...) của từng đợt thu, đếm riêng từng hợp đồng. Trả {mã đợt: số đợt}."""
+	if isinstance(contracts, str):
+		contracts = frappe.parse_json(contracts)
+	if not isinstance(contracts, list):
+		return {}
+	contracts = list(dict.fromkeys(str(c).strip() for c in contracts if c and str(c).strip()))
+	if len(contracts) > MAX_INSTALLMENT_CONTRACTS:
+		frappe.throw(_(MSG_INSTALLMENT_LIMIT))
+	frappe.has_permission("Payment Schedule", "read", throw=True)
+	# Cố ý dùng get_all (không lọc quyền từng dòng) trong installment_numbers: số đợt phải tính trên đủ đợt
+	# của hợp đồng. Hàm chỉ trả mã đợt và số thứ tự, không trả dữ liệu nào khác.
+	return installment_numbers(contracts)
 
 
 @frappe.whitelist()

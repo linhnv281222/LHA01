@@ -18,6 +18,7 @@ from contract_tracker.contract_tracker.doctype.contract.test_contract import (
 from contract_tracker.contract_tracker.doctype.payment_schedule.payment_schedule import (
 	compute_schedule_state,
 	has_documents,
+	installment_numbers,
 	refresh_schedules,
 )
 from contract_tracker.tests.test_setup import VIEWER, make_user
@@ -46,6 +47,20 @@ def active(doc):
 class TestPaymentSchedule(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
+
+	def test_installment_numbers_by_due_date(self):
+		doc = active(example_contract())
+		names = sorted(r.name for r in schedules(doc.name))
+		self.assertEqual(len(names), 7)
+		# 3 đợt đầu đến hạn 15/01, 15/02, 15/03/2027 (gán ngược thứ tự mã); các đợt còn lại cùng ngày muộn hơn.
+		dates = ["2027-03-15", "2027-02-15", "2027-01-15"] + ["2027-05-01"] * 4
+		for n, d in zip(names, dates, strict=True):
+			frappe.db.set_value(DT, n, "due_date", d)
+		result = installment_numbers([doc.name])
+		self.assertEqual([result[n] for n in names[:3]], [3, 2, 1])
+		# Trùng ngày thì theo mã đợt.
+		self.assertEqual([result[n] for n in names[3:]], [4, 5, 6, 7])
+		self.assertEqual(installment_numbers([]), {})
 
 	def test_draft_has_no_schedules(self):
 		doc = example_contract().insert()
