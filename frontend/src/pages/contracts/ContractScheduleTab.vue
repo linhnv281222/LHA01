@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Tab "Lịch thu" của form hợp đồng: các đợt thu do hệ thống sinh, chỉ đọc.
-import { computed } from 'vue'
-import { Alert, Button, LoadingText, useList } from 'frappe-ui'
+import { computed, watch } from 'vue'
+import { Alert, Button, LoadingText, toast, useCall, useList } from 'frappe-ui'
+import ScheduleTimeline from './ScheduleTimeline.vue'
 import { FnField, FormSection, MiniTable, StatusBadge, serverErrorMessage } from '@/standard'
 import {
   MSG_NO_SCHEDULE,
@@ -15,6 +16,7 @@ import {
   requestStatusOf,
   scheduleTotals,
   showScheduleTable,
+  withInstallmentNo,
   type ScheduleRow,
 } from './contract'
 
@@ -24,11 +26,26 @@ const list = useList<ScheduleRow>({
   doctype: SCHEDULE_DOCTYPE,
   fields: SCHEDULE_FIELDS,
   filters: { contract: props.contract },
-  orderBy: 'due_date asc',
+  orderBy: 'due_date asc, name asc',
   limit: 1000,
 })
 
-const rows = computed<ScheduleRow[]>(() => list.data ?? [])
+// Số đợt do server tính trên toàn bộ đợt của hợp đồng; lỗi thì ô STT để trống (bảng vẫn dùng được).
+const numbers = useCall<Record<string, number>, { contracts: string[] }>({
+  url: '/api/v2/method/contract_tracker.api.get_installment_numbers',
+  method: 'POST',
+  immediate: false,
+})
+async function loadNumbers() {
+  try {
+    await numbers.submit({ contracts: [props.contract] })
+  } catch (err) {
+    toast.error(serverErrorMessage(err))
+  }
+}
+watch(() => list.data, () => void loadNumbers(), { immediate: true })
+
+const rows = computed<ScheduleRow[]>(() => withInstallmentNo(list.data ?? [], numbers.data as Record<string, number> | null))
 const totals = computed(() => scheduleTotals(rows.value))
 const showTable = computed(() => showScheduleTable(props.status))
 
@@ -56,6 +73,7 @@ defineExpose({ reload })
             <template #cell-invoice_status="{ row }"><StatusBadge :status="invoiceStatusOf(row as ScheduleRow)" /></template>
             <template #cell-payment_status="{ row }"><StatusBadge :status="paymentStatusOf(row as ScheduleRow)" /></template>
             <template #cell-is_overdue="{ row }"><StatusBadge :status="overdueStatusOf(row as ScheduleRow)" /></template>
+            <template #cell-_timeline="{ row }"><ScheduleTimeline :row="row as ScheduleRow" /></template>
           </MiniTable>
         </div>
         <FormSection title="Tổng" muted :columns="3">

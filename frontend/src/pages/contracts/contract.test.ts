@@ -10,6 +10,10 @@ import {
   PERIODS,
   SCHEDULE_COLUMNS,
   SCHEDULE_DOCTYPE,
+  installmentNoText,
+  scheduleTimeline,
+  timelineText,
+  withInstallmentNo,
   STATUSES,
   acceptanceStatusOf,
   applyContractEndDate,
@@ -823,14 +827,78 @@ describe('tab Lịch thu', () => {
     { name: 'b', item_name: 'Triển khai', schedule_name: 'Tạm ứng', due_date: '2027-01-15', amount_before_tax: 30_000_000, tax_amount: 3_000_000, total_amount: 33_000_000, requires_acceptance: 1, acceptance_status: 'Chưa' },
   ]
 
-  it('13 cột đúng thứ tự, nhãn và kiểu', () => {
+  it('14 cột đúng thứ tự, nhãn và kiểu (cột Tiến trình ở cuối)', () => {
     expect(SCHEDULE_COLUMNS.map((c) => c.label)).toEqual([
       'STT', 'Hạng mục', 'Tên đợt', 'Kỳ', 'Ngày đến hạn', 'Trước thuế (VND)', 'Tiền thuế (VND)', 'Tổng tiền (VND)',
-      'Nghiệm thu', 'Đề nghị thanh toán', 'Hóa đơn', 'Thanh toán', 'Quá hạn',
+      'Nghiệm thu', 'Đề nghị thanh toán', 'Hóa đơn', 'Thanh toán', 'Quá hạn', 'Tiến trình',
     ])
     expect(SCHEDULE_COLUMNS.map((c) => c.type)).toEqual([
-      'index', undefined, undefined, undefined, 'date', 'currency', 'currency', 'currency', 'status', 'status', 'status', 'status', 'status',
+      undefined, undefined, undefined, undefined, 'date', 'currency', 'currency', 'currency', 'status', 'status', 'status', 'status', 'status', undefined,
     ])
+  })
+
+  it('STT hiển thị "Đợt n" theo số đợt, không đổi khi đảo thứ tự hoặc lọc bớt dòng', () => {
+    const base = [{ name: 'p1' }, { name: 'p2' }, { name: 'p3' }]
+    const map = { p1: 1, p2: 2, p3: 3 }
+    const stt = SCHEDULE_COLUMNS[0]
+    const texts = (list: { name: string }[]) => withInstallmentNo(list, map).map((r) => cellText(stt, r as ScheduleRow))
+    expect(texts(base)).toEqual(['Đợt 1', 'Đợt 2', 'Đợt 3'])
+    expect(texts([...base].reverse())).toEqual(['Đợt 3', 'Đợt 2', 'Đợt 1'])
+    expect(texts([base[2]])).toEqual(['Đợt 3'])
+    expect(withInstallmentNo([{ name: 'zz' }], map)[0].installment_no).toBeNull()
+    expect(installmentNoText({ installment_no: null })).toBe('')
+    expect(installmentNoText({ installment_no: 3 })).toBe('Đợt 3')
+  })
+
+  it('cột Tiến trình không sắp xếp, không lọc', () => {
+    const last = SCHEDULE_COLUMNS[SCHEDULE_COLUMNS.length - 1]
+    expect(last.key).toBe('_timeline')
+    expect(last.sortable).toBe(false)
+    expect(last.filter).toBe('none')
+  })
+
+  describe('scheduleTimeline', () => {
+    const base: ScheduleRow = { name: 'x', requires_acceptance: 1, acceptance_status: 'Chưa', request_status: 'Chưa lập', invoice_status: 'Chưa xuất', payment_status: 'Chưa thu', paid_amount: 0, total_amount: 33_000_000, is_overdue: 0 }
+
+    it('cần nghiệm thu, mọi bước chưa xong: 4 bước, Nghiệm thu là bước hiện tại', () => {
+      const t = scheduleTimeline(base)
+      expect(t.steps.map((s) => s.title)).toEqual(['Nghiệm thu', 'Đề nghị', 'Hóa đơn', 'Thanh toán'])
+      expect(t.steps.map((s) => s.status.label)).toEqual(['Chưa nghiệm thu', 'Chưa lập', 'Chưa xuất', 'Chưa thu'])
+      expect(t.steps.map((s) => s.current)).toEqual([true, false, false, false])
+      expect(t.steps.every((s) => s.state === 'todo' && s.status.icon === 'lucide-circle')).toBe(true)
+      expect(t.overdue).toBeNull()
+    })
+
+    it('không cần nghiệm thu: chỉ 3 bước Đề nghị, Hóa đơn, Thanh toán', () => {
+      const t = scheduleTimeline({ ...base, requires_acceptance: 0, acceptance_status: 'Không cần' })
+      expect(t.steps.map((s) => s.title)).toEqual(['Đề nghị', 'Hóa đơn', 'Thanh toán'])
+      expect(t.steps[0].current).toBe(true)
+    })
+
+    it('tổng 33.000.000 đã thu 20.000.000, đã xuất hóa đơn, đã lập đề nghị: Thanh toán đang dở', () => {
+      const t = scheduleTimeline({
+        ...base, requires_acceptance: 0, request_status: 'Đã lập', invoice_status: 'Đã xuất', payment_status: 'Thu một phần', paid_amount: 20_000_000,
+      })
+      expect(t.steps.map((s) => s.state)).toEqual(['done', 'done', 'partial'])
+      expect(t.steps[0].status.icon).toBe('lucide-circle-check')
+      expect(t.steps[2].status.icon).toBe('lucide-circle-dot')
+      expect(t.steps[2].status.label).toContain('Thu một phần')
+      expect(t.steps.map((s) => s.current)).toEqual([false, false, true])
+      expect(t.steps.every((s) => s.status.icon && s.status.label)).toBe(true)
+    })
+
+    it('mọi bước xong thì không có bước hiện tại', () => {
+      const t = scheduleTimeline({ ...base, acceptance_status: 'Đã ký', request_status: 'Đã lập', invoice_status: 'Đã xuất', payment_status: 'Đã thu' })
+      expect(t.steps.every((s) => s.state === 'done' && !s.current)).toBe(true)
+    })
+
+    it('Quá hạn: có nhãn kèm biểu tượng khi is_overdue = 1, ngược lại không có', () => {
+      const t = scheduleTimeline({ ...base, is_overdue: 1 })
+      expect(t.overdue?.label).toBe('Quá hạn')
+      expect(t.overdue?.icon).toBeTruthy()
+      expect(scheduleTimeline({ ...base, is_overdue: 0 }).overdue).toBeNull()
+      expect(timelineText({ ...base, is_overdue: 1 })).toContain('Quá hạn')
+    })
   })
 
   it('overdueStatusOf: Quá hạn đỏ có icon, ngược lại Không', () => {

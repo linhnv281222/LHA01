@@ -2,10 +2,12 @@
 // Đợt thu do hệ thống sinh nên màn này chỉ đọc; không có form.
 import {
   acceptanceStatusOf,
+  installmentNoText,
   invoiceStatusOf,
   overdueStatusOf,
   paymentStatusOf,
   requestStatusOf,
+  timelineText,
   type ScheduleRow,
 } from '@/pages/contracts/contract'
 import { formatCurrency, type Column, type StatCard, type StatusDef, type TreeNode } from '@/standard'
@@ -77,7 +79,7 @@ export function makeColumns(userName: (user: string) => string): Column<Schedule
   })
   return [
     { key: '_pick', label: 'Chọn', width: 80, pin: 'left', sortable: false, filter: 'none', required: true },
-    { key: '_index', label: 'STT', width: 56, type: 'index', pin: 'left' },
+    { key: '_installment', label: 'STT', width: 72, pin: 'left', value: (r) => r.installment_no ?? 0, format: installmentNoText },
     { key: 'contract', label: 'Số hợp đồng', width: 150, pin: 'left', required: true },
     { key: 'customer_name', label: 'Khách hàng', width: 240 },
     { key: 'schedule_name', label: 'Tên đợt', width: 220 },
@@ -103,7 +105,14 @@ export function makeColumns(userName: (user: string) => string): Column<Schedule
       hidden: true,
       format: (r) => (r.responsible_user ? userName(r.responsible_user) : ''),
     },
+    // Ngoài cùng bên phải; hợp đồng và cột trạng thái riêng vẫn để lọc/sắp xếp.
+    { key: '_timeline', label: 'Tiến trình', width: 560, sortable: false, filter: 'none', format: timelineText },
   ]
+}
+
+/** Các hợp đồng (không trùng) có trong danh sách đợt, để hỏi số đợt. */
+export function contractsOf(rows: Pick<ScheduleListRow, 'contract'>[]): string[] {
+  return [...new Set(rows.map((r) => r.contract))]
 }
 
 export const COLUMNS = makeColumns((u) => u)

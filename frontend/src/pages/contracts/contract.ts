@@ -58,9 +58,9 @@ export interface DeleteResult {
   skipped: { name: string; reason: string }[]
 }
 
-/** Nháp và có quyền xóa thì panel hiện nút "Xóa hợp đồng". */
+/** Nháp hoặc Đã hủy và có quyền xóa thì panel hiện nút "Xóa hợp đồng" (khớp DELETABLE_STATUSES ở server). */
 export const canDeleteInPanel = (status: string | undefined | null, canDelete: boolean) =>
-  canDelete && status === 'Nháp'
+  canDelete && (status === 'Nháp' || status === 'Đã hủy')
 /** Chỉ Admin (System Manager) và chỉ hợp đồng Đang hiệu lực mới có nút "Chuyển về Nháp". */
 export const canRevert = (status: string | undefined | null, isAdmin: boolean) =>
   isAdmin && status === 'Đang hiệu lực'
@@ -1268,6 +1268,8 @@ export interface ScheduleRow {
   payment_status?: string | null
   paid_amount?: number | null
   is_overdue?: 0 | 1 | boolean | null
+  /** Số đợt trong hợp đồng, server tính khi đọc (get_installment_numbers), không lưu. */
+  installment_no?: number | null
 }
 
 export const SCHEDULE_FIELDS: (keyof ScheduleRow)[] = [
@@ -1338,6 +1340,59 @@ export function overdueStatusOf(row: ScheduleRow): StatusDef {
   return row.is_overdue ? OVERDUE_STATUS.yes : OVERDUE_STATUS.no
 }
 
+/** "Đợt <n>"; chưa có số (đang tải hoặc lỗi) thì để trống. */
+export function installmentNoText(row: Pick<ScheduleRow, 'installment_no'>): string {
+  return row.installment_no ? `Đợt ${row.installment_no}` : ''
+}
+
+/** Gắn số đợt (mã đợt -> số) vào từng dòng; không có trong map thì null. */
+export function withInstallmentNo<T extends { name: string }>(rows: T[], map: Record<string, number> | null | undefined): (T & { installment_no: number | null })[] {
+  return rows.map((r) => ({ ...r, installment_no: map?.[r.name] ?? null }))
+}
+
+export type TimelineState = 'done' | 'partial' | 'todo'
+export interface TimelineStep {
+  key: 'acceptance' | 'request' | 'invoice' | 'payment'
+  title: string
+  state: TimelineState
+  /** Bước đầu tiên chưa xong. */
+  current: boolean
+  /** Chữ và màu lấy từ hàm trạng thái của cột; icon đổi theo dạng (xong, dở, chưa). */
+  status: StatusDef
+}
+const TIMELINE_ICON: Record<TimelineState, string> = {
+  done: 'lucide-circle-check',
+  partial: 'lucide-circle-dot',
+  todo: 'lucide-circle',
+}
+
+/** Dải tiến trình của một đợt: Nghiệm thu (nếu cần) → Đề nghị → Hóa đơn → Thanh toán, kèm nhãn Quá hạn. */
+export function scheduleTimeline(row: ScheduleRow): { steps: TimelineStep[]; overdue: StatusDef | null } {
+  const defs: { key: TimelineStep['key']; title: string; done: boolean; partial?: boolean; status: StatusDef }[] = []
+  if (row.requires_acceptance) {
+    defs.push({ key: 'acceptance', title: 'Nghiệm thu', done: row.acceptance_status === 'Đã ký', status: acceptanceStatusOf(row) })
+  }
+  defs.push(
+    { key: 'request', title: 'Đề nghị', done: row.request_status === 'Đã lập', status: requestStatusOf(row) },
+    { key: 'invoice', title: 'Hóa đơn', done: row.invoice_status === 'Đã xuất', status: invoiceStatusOf(row) },
+    { key: 'payment', title: 'Thanh toán', done: row.payment_status === 'Đã thu', partial: row.payment_status === 'Thu một phần', status: paymentStatusOf(row) },
+  )
+  const currentIdx = defs.findIndex((d) => !d.done)
+  const steps = defs.map((d, i): TimelineStep => {
+    const state: TimelineState = d.done ? 'done' : d.partial ? 'partial' : 'todo'
+    return { key: d.key, title: d.title, state, current: i === currentIdx, status: { ...d.status, icon: TIMELINE_ICON[state] } }
+  })
+  return { steps, overdue: row.is_overdue ? OVERDUE_STATUS.yes : null }
+}
+
+/** Dạng chữ của dải tiến trình (Xuất Excel), ví dụ "Đề nghị: Đã lập ✓ · Hóa đơn: Chưa xuất · Quá hạn". */
+export function timelineText(row: ScheduleRow): string {
+  const { steps, overdue } = scheduleTimeline(row)
+  const parts = steps.map((s) => `${s.title}: ${s.status.label}${s.state === 'done' ? ' ✓' : ''}`)
+  if (overdue) parts.push(overdue.label)
+  return parts.join(' · ')
+}
+
 /** "dd/mm/yyyy - dd/mm/yyyy"; rỗng nếu đợt không định kỳ. */
 export function periodText(row: Pick<ScheduleRow, 'period_from' | 'period_to'>): string {
   if (!row.period_from || !row.period_to) return ''
@@ -1345,7 +1400,7 @@ export function periodText(row: Pick<ScheduleRow, 'period_from' | 'period_to'>):
 }
 
 export const SCHEDULE_COLUMNS: Column<ScheduleRow>[] = [
-  { key: '_index', label: 'STT', width: 56, type: 'index' },
+  { key: '_installment', label: 'STT', width: 72, value: (r) => r.installment_no ?? 0, format: installmentNoText },
   { key: 'item_name', label: 'Hạng mục', width: 180 },
   { key: 'schedule_name', label: 'Tên đợt', width: 220 },
   { key: '_period', label: 'Kỳ', width: 220, format: periodText },
@@ -1358,6 +1413,7 @@ export const SCHEDULE_COLUMNS: Column<ScheduleRow>[] = [
   { key: 'invoice_status', label: 'Hóa đơn', width: 160, type: 'status', status: invoiceStatusOf },
   { key: 'payment_status', label: 'Thanh toán', width: 230, type: 'status', status: paymentStatusOf },
   { key: 'is_overdue', label: 'Quá hạn', width: 120, type: 'status', status: overdueStatusOf },
+  { key: '_timeline', label: 'Tiến trình', width: 560, sortable: false, filter: 'none', format: timelineText },
 ]
 
 /** Dòng Tổng của bảng Lịch thu. */
