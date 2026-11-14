@@ -122,8 +122,8 @@ const emit = defineEmits<{ search: [] }>()
       <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="emit('search')">
         <div class="min-h-0 flex-1 overflow-y-auto">
           <section v-if="showGroup" aria-labelledby="fn-group-title">
-            <h2 id="fn-group-title" class="fn-panel-title flex items-center justify-between">
-              {{ groupTitle }}
+            <h2 id="fn-group-title" class="fn-panel-title fn-panel-title--group flex items-center justify-between">
+              <span class="flex items-center gap-2"><span class="lucide-folder-tree size-4" aria-hidden="true" />{{ groupTitle }}</span>
               <button
                 type="button"
                 class="-my-1 flex size-7 items-center justify-center rounded-4 text-ink-gray-5 hover:bg-surface-gray-2 hover:text-ink-gray-9"
@@ -138,10 +138,10 @@ const emit = defineEmits<{ search: [] }>()
               <slot name="group" />
             </div>
           </section>
-          <div v-if="showGroup" class="mx-3 border-t border-outline-gray-2" role="separator" />
-          <section aria-labelledby="fn-filter-title">
-            <h2 id="fn-filter-title" class="fn-panel-title flex items-center justify-between">
-              {{ filterTitle }}
+          <div v-if="showGroup" class="fn-panel-gap" role="separator" />
+          <section class="fn-panel-filters" aria-labelledby="fn-filter-title">
+            <h2 id="fn-filter-title" class="fn-panel-title fn-panel-title--filter flex items-center justify-between">
+              <span class="flex items-center gap-2"><span class="lucide-sliders-horizontal size-4" aria-hidden="true" />{{ filterTitle }}</span>
               <button
                 v-if="!showGroup"
                 type="button"
@@ -158,7 +158,7 @@ const emit = defineEmits<{ search: [] }>()
             </div>
           </section>
         </div>
-        <div class="border-t border-outline-gray-2 bg-surface-base p-3">
+        <div class="fn-panel-foot p-3">
           <Button
             type="submit"
             variant="solid"
@@ -202,16 +202,45 @@ const emit = defineEmits<{ search: [] }>()
   background: linear-gradient(to right, transparent 3px, theme('colors.fn.brand') 3px, theme('colors.fn.brand') 5px, transparent 5px);
   outline: none;
 }
+/* Hai khối lọc phân biệt rõ: "Truy vấn nhóm" tông xanh dương, nền trắng; "Truy vấn chi tiết" tông xanh ngọc, nền xám
+   nhạt để các ô nhập nổi lên; giữa hai khối là một dải ngăn dày. Tiêu đề là dải màu có vạch trái, dính khi cuộn. */
 .fn-panel-title {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 14px 12px 6px;
-  background: var(--surface-base);
+  padding: 9px 10px 9px 12px;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ink-gray-5);
+  box-shadow: inset 4px 0 0 var(--fn-p-bar), inset 0 -1px 0 var(--fn-p-line);
+  background: var(--fn-p-bg);
+  color: var(--fn-p-ink);
+}
+.fn-panel-title--group {
+  --fn-p-bg: #e3edf8;
+  --fn-p-bar: #1d5fa8;
+  --fn-p-ink: #123e70;
+  --fn-p-line: #c9daee;
+}
+.fn-panel-title--filter {
+  --fn-p-bg: #dff1ec;
+  --fn-p-bar: #0f766e;
+  --fn-p-ink: #0b4f4a;
+  --fn-p-line: #c3e3da;
+}
+.fn-panel-gap {
+  height: 10px;
+  background: #e6eaf0;
+  border-top: 1px solid var(--outline-gray-2);
+  border-bottom: 1px solid var(--outline-gray-2);
+}
+.fn-panel-filters {
+  background: #f6f8fa;
+  min-height: 100%;
+}
+.fn-panel-foot {
+  border-top: 1px solid var(--outline-gray-2);
+  background: #f6f8fa;
 }
 </style>

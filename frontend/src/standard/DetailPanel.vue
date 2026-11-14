@@ -11,8 +11,9 @@ const emit = defineEmits<{ close: [] }>()
 
 <template>
   <section class="rounded-6 border border-outline-gray-2 bg-surface-base" aria-live="polite">
-    <header class="flex items-center justify-between gap-2 border-b border-outline-gray-1 px-4 py-2.5">
+    <header class="fn-detail-head flex items-center justify-between gap-2 px-4 py-2.5">
       <div class="flex min-w-0 items-center gap-2">
+        <span class="lucide-file-text size-4 shrink-0 text-fn-brand" aria-hidden="true" />
         <h2 class="truncate text-lg-semibold text-ink-gray-9">{{ title }}</h2>
         <slot name="badge" />
       </div>
@@ -36,7 +37,7 @@ const emit = defineEmits<{ close: [] }>()
           <dd v-else class="mt-0.5 break-words text-base text-ink-gray-9">{{ f.value }}</dd>
         </div>
       </dl>
-      <div v-if="$slots.aside" class="border-l border-outline-gray-1 px-4 py-3">
+      <div v-if="$slots.aside" class="border-l border-outline-gray-1 bg-surface-gray-1 px-4 py-3">
         <slot name="aside" />
       </div>
     </div>
@@ -45,3 +46,12 @@ const emit = defineEmits<{ close: [] }>()
     </div>
   </section>
 </template>
+
+<style scoped>
+.fn-detail-head {
+  border-radius: 6px 6px 0 0;
+  background: #f3f7fc;
+  border-bottom: 1px solid #d9e5f3;
+  box-shadow: inset 4px 0 0 theme('colors.fn.brand');
+}
+</style>
