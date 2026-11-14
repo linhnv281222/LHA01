@@ -357,7 +357,6 @@ async function runRevert(no: string) {
 </script>
 
 <template>
-  <div class="max-w-full overflow-x-clip">
   <SplitLayout :searching="list.loading" @search="search">
     <template #group>
       <GroupTree v-model="draft.tree" :default-expanded="treeExpanded" :nodes="groupTree(allForTree.data ?? [])" search-placeholder="Tìm khách hàng, số hợp đồng" />
@@ -581,5 +580,4 @@ async function runRevert(no: string) {
       <p v-else class="text-base text-ink-gray-7">Không có hợp đồng nào bị bỏ qua.</p>
     </Dialog>
   </SplitLayout>
-  </div>
 </template>
